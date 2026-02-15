@@ -1,0 +1,34 @@
+<script lang="ts">
+  import { hello } from '$lib/api';
+
+  async function test() {
+    const result = await hello();
+    console.log(result);
+  }
+  import * as echarts from 'echarts';
+  console.log(echarts.version);
+</script>
+
+<section class="space-y-6">
+  <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+    <article class="rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-[#151926]">
+      <p class="text-xs text-gray-500 dark:text-gray-400">今日累计</p>
+      <p class="mt-2 text-2xl font-semibold text-gray-900 dark:text-gray-100">0.0 h</p>
+    </article>
+
+    <article class="rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-[#151926]">
+      <p class="text-xs text-gray-500 dark:text-gray-400">提醒阈值</p>
+      <p class="mt-2 text-2xl font-semibold text-gray-900 dark:text-gray-100">2.0 h</p>
+    </article>
+  </div>
+
+  <div class="rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-[#151926]">
+    <p class="mb-4 text-sm text-gray-600 dark:text-gray-400">后端联调测试</p>
+    <button
+      on:click={test}
+      class="inline-flex items-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-400"
+    >
+      Test Rust
+    </button>
+  </div>
+</section>
