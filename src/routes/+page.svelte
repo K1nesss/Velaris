@@ -1,8 +1,5 @@
-<script lang="ts" module>
-  import { redirect } from '@sveltejs/kit';
+<!-- Root page intentionally redirects via +page.ts -->
 
-  export const load = () => {
-    throw redirect(302, '/dashboard');
-  };
-</script>
+
+
 
