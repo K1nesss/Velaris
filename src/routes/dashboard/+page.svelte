@@ -1,34 +1,268 @@
 <script lang="ts">
-  import { hello } from '$lib/api';
+  import { onMount } from 'svelte';
 
-  async function test() {
-    const result = await hello();
-    console.log(result);
+  const CURRENT_PLAYING_POLL_INTERVAL_MS = 2000;
+  const SESSION_COMPLETION_POLL_INTERVAL_MS = 5000;
+
+  import {
+    getDashboardCurrentPlaying,
+    getDashboardDailyChart,
+    getDashboardDonutData,
+    getDashboardRecentSessions,
+    getDashboardTodayTotal,
+    getDashboardWeekTotal,
+    type CurrentPlayingGame,
+    type DailyChartItem,
+    type DonutChartItem,
+    type RecentSessionItem,
+  } from '$lib/api';
+  import CurrentPlayingCard from './components/CurrentPlayingCard.svelte';
+  import RecentSessionsList from './components/RecentSessionsList.svelte';
+  import DailyChart from './components/DailyChart.svelte';
+  import DonutChart from './components/DonutChart.svelte';
+
+  let todayPlaytime = $state('2h 15m');
+  let weekPlaytime = $state('9h 42m');
+  let initialLoading = $state(true);
+  let currentPlaying = $state<CurrentPlayingGame | null>(null);
+  let recentSessions = $state<RecentSessionItem[]>([]);
+  let dailyChartItems = $state<DailyChartItem[]>([]);
+  let donutItems = $state<DonutChartItem[]>([]);
+  let dashboardRefreshing = false;
+  let currentPlayingRefreshing = false;
+  let sessionCompletionRefreshing = false;
+  let metricsRefreshing = false;
+  let latestCompletedSessionId = $state<number | null>(null);
+
+  function getLatestCompletedSessionId(sessions: RecentSessionItem[]) {
+    return sessions.find((session) => session.end_time !== null)?.session_id ?? null;
   }
-  import * as echarts from 'echarts';
-  console.log(echarts.version);
+
+  async function refreshMetrics(showLoading = false) {
+    if (metricsRefreshing) {
+      return;
+    }
+
+    metricsRefreshing = true;
+    if (showLoading) {
+      initialLoading = true;
+    }
+
+    try {
+      const [today, week, chart, donut] = await Promise.all([
+        getDashboardTodayTotal(),
+        getDashboardWeekTotal(),
+        getDashboardDailyChart(7),
+        getDashboardDonutData(10),
+      ]);
+
+      todayPlaytime = today.formatted;
+      weekPlaytime = week.formatted;
+      dailyChartItems = chart;
+      donutItems = donut;
+    } catch (error) {
+      console.error('Failed to refresh dashboard metrics', error);
+    } finally {
+      metricsRefreshing = false;
+      if (showLoading) {
+        initialLoading = false;
+      }
+    }
+  }
+
+  async function refreshCurrentPlaying() {
+    if (currentPlayingRefreshing) {
+      return;
+    }
+
+    currentPlayingRefreshing = true;
+    try {
+      const previous = currentPlaying;
+      const current = await getDashboardCurrentPlaying();
+      const gameStarted = previous === null && current !== null;
+
+      currentPlaying = current;
+
+      // When a new game is detected as started, update recent session list immediately.
+      if (gameStarted) {
+        const sessions = await getDashboardRecentSessions(8);
+        recentSessions = sessions;
+        latestCompletedSessionId = getLatestCompletedSessionId(sessions);
+      }
+    } catch (error) {
+      console.error('Failed to refresh current playing game', error);
+    } finally {
+      currentPlayingRefreshing = false;
+    }
+  }
+
+  async function refreshWhenSessionCompleted() {
+    if (sessionCompletionRefreshing) {
+      return;
+    }
+
+    sessionCompletionRefreshing = true;
+    try {
+      const sessions = await getDashboardRecentSessions(8);
+      recentSessions = sessions;
+
+      const newestCompletedSessionId = getLatestCompletedSessionId(sessions);
+      const hasNewCompletedSession =
+        newestCompletedSessionId !== null &&
+        latestCompletedSessionId !== null &&
+        newestCompletedSessionId !== latestCompletedSessionId;
+
+      latestCompletedSessionId = newestCompletedSessionId;
+
+      // Refresh heavy dashboard metrics only when a new session has ended.
+      if (hasNewCompletedSession) {
+        await refreshMetrics(false);
+      }
+    } catch (error) {
+      console.error('Failed to check session completion updates', error);
+    } finally {
+      sessionCompletionRefreshing = false;
+    }
+  }
+
+  async function loadDashboardData(showLoading = false) {
+    if (dashboardRefreshing) {
+      return;
+    }
+
+    dashboardRefreshing = true;
+    if (showLoading) {
+      initialLoading = true;
+    }
+
+    try {
+      const [today, week, current, sessions, chart, donut] = await Promise.all([
+        getDashboardTodayTotal(),
+        getDashboardWeekTotal(),
+        getDashboardCurrentPlaying(),
+        getDashboardRecentSessions(8),
+        getDashboardDailyChart(7),
+        getDashboardDonutData(10),
+      ]);
+
+      todayPlaytime = today.formatted;
+      weekPlaytime = week.formatted;
+      currentPlaying = current;
+      recentSessions = sessions;
+      dailyChartItems = chart;
+      donutItems = donut;
+      latestCompletedSessionId = getLatestCompletedSessionId(sessions);
+    } catch (error) {
+      console.error('Failed to load dashboard data', error);
+    } finally {
+      dashboardRefreshing = false;
+      if (showLoading) {
+        initialLoading = false;
+      }
+    }
+  }
+
+  onMount(() => {
+    loadDashboardData(true);
+
+    const currentPlayingIntervalId = window.setInterval(() => {
+      refreshCurrentPlaying();
+    }, CURRENT_PLAYING_POLL_INTERVAL_MS);
+
+    const sessionCompletionIntervalId = window.setInterval(() => {
+      refreshWhenSessionCompleted();
+    }, SESSION_COMPLETION_POLL_INTERVAL_MS);
+
+    const handleWindowFocus = () => {
+      refreshCurrentPlaying();
+      refreshWhenSessionCompleted();
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        refreshCurrentPlaying();
+        refreshWhenSessionCompleted();
+      }
+    };
+
+    window.addEventListener('focus', handleWindowFocus);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      window.clearInterval(currentPlayingIntervalId);
+      window.clearInterval(sessionCompletionIntervalId);
+      window.removeEventListener('focus', handleWindowFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  });
 </script>
 
 <section class="space-y-6">
-  <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-    <article class="rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-[#151926]">
-      <p class="text-xs text-gray-500 dark:text-gray-400">今日累计</p>
-      <p class="mt-2 text-2xl font-semibold text-gray-900 dark:text-gray-100">0.0 h</p>
-    </article>
+  <div class="grid gap-6 xl:grid-cols-2">
+    <div class="min-w-0 space-y-6">
+      <div class="grid gap-6 sm:grid-cols-2">
+        <div class="relative overflow-hidden rounded-xl border border-cyan-200/50 bg-white p-6 shadow-sm group dark:border-white/10 dark:bg-[#151926]">
+          <div class="absolute inset-0 bg-linear-to-r from-cyan-500/10 to-blue-600/10 opacity-50 transition-opacity group-hover:opacity-30 dark:opacity-20"></div>
+          <div class="relative z-10 flex items-center justify-between gap-4">
+            <div>
+              <h3 class="mb-1 text-xs font-medium uppercase tracking-[0.2em] text-cyan-600 dark:text-cyan-400">Today's Playtime</h3>
+              <div class="text-3xl font-bold text-cyan-700 dark:text-cyan-200 sm:text-4xl">{todayPlaytime}</div>
+            </div>
+            <div class="relative z-10 flex h-12 w-12 items-center justify-center rounded-full bg-cyan-500/20 text-gray-500 dark:text-gray-300">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                class="h-6 w-6"
+                aria-hidden="true"
+              >
+                <circle cx="12" cy="12" r="10" />
+                <path d="M12 6v6l4 2" />
+              </svg>
+            </div>
+          </div>
+        </div>
 
-    <article class="rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-[#151926]">
-      <p class="text-xs text-gray-500 dark:text-gray-400">提醒阈值</p>
-      <p class="mt-2 text-2xl font-semibold text-gray-900 dark:text-gray-100">2.0 h</p>
-    </article>
-  </div>
+        <div class="relative overflow-hidden rounded-xl border border-purple-200/50 bg-white p-6 shadow-sm group dark:border-white/10 dark:bg-[#151926]">
+          <div class="absolute inset-0 bg-linear-to-r from-purple-500/10 to-pink-600/10 opacity-50 transition-opacity group-hover:opacity-30 dark:opacity-20"></div>
+          <div class="relative z-10 flex items-center justify-between gap-4">
+            <div>
+              <h3 class="mb-1 text-xs font-medium uppercase tracking-[0.2em] text-purple-600 dark:text-purple-400">This Week</h3>
+              <div class="text-3xl font-bold text-purple-700 dark:text-purple-200 sm:text-4xl">{weekPlaytime}</div>
+            </div>
+            <div class="relative z-10 flex h-12 w-12 items-center justify-center rounded-full bg-purple-500/20 text-gray-500 dark:text-gray-300">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                class="h-6 w-6"
+                aria-hidden="true"
+              >
+                <path d="M8 2v4" />
+                <path d="M16 2v4" />
+                <rect width="18" height="18" x="3" y="4" rx="2" />
+                <path d="M3 10h18" />
+              </svg>
+            </div>
+          </div>
+        </div>
+      </div>
 
-  <div class="rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-[#151926]">
-    <p class="mb-4 text-sm text-gray-600 dark:text-gray-400">后端联调测试</p>
-    <button
-      on:click={test}
-      class="inline-flex items-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-400"
-    >
-      Test Rust
-    </button>
+      <CurrentPlayingCard currentPlaying={currentPlaying} loading={initialLoading} />
+      <RecentSessionsList sessions={recentSessions} loading={initialLoading} />
+    </div>
+
+    <div class="min-w-0 space-y-6">
+      <DailyChart items={dailyChartItems} loading={initialLoading} />
+      <DonutChart items={donutItems} loading={initialLoading} />
+    </div>
   </div>
 </section>

@@ -2,3 +2,16 @@
 
 /* Tailwind v4: 使用 class 驱动 dark 模式（而不是仅跟随系统主题） */
 @custom-variant dark (&:where(.dark, .dark *));
+
+html,
+body,
+* {
+	scrollbar-width: none;
+}
+
+html::-webkit-scrollbar,
+body::-webkit-scrollbar,
+*::-webkit-scrollbar {
+	width: 0;
+	height: 0;
+}

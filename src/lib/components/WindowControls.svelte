@@ -5,6 +5,10 @@
     await invoke('window_minimize');
   }
 
+  async function toggleMaximize() {
+    await invoke('window_toggle_maximize');
+  }
+
   async function close() {
     await invoke('window_close');
   }
@@ -21,6 +25,17 @@
     title="Minimize"
   >
     <span class="mx-auto block h-px w-3 bg-current opacity-80 group-hover:opacity-100"></span>
+  </button>
+
+  <button
+    on:click={toggleMaximize}
+    data-tauri-drag-region="false"
+    class="group h-6 w-10 text-gray-600 transition hover:bg-gray-200 active:bg-gray-300 dark:text-gray-200 dark:hover:bg-white/10 dark:active:bg-white/20"
+    title="Maximize"
+  >
+    <span class="relative mx-auto block h-3 w-3">
+      <span class="absolute inset-0 border border-current opacity-80 group-hover:opacity-100"></span>
+    </span>
   </button>
 
   <button
