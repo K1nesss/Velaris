@@ -10,6 +10,7 @@ use api::dashboard::{
     dashboard_current_playing, dashboard_daily_chart, dashboard_donut_data,
     dashboard_recent_sessions, dashboard_snapshot, dashboard_today_total, dashboard_week_total,
 };
+use api::games::{game_detail, games_list};
 use core::file_watcher::start_file_watcher;
 use core::process_watcher::start_process_monitor;
 use core::steam_scanner::steam_scan_print;
@@ -67,7 +68,9 @@ fn main() {
             dashboard_current_playing,
             dashboard_donut_data,
             dashboard_recent_sessions,
-            dashboard_snapshot
+            dashboard_snapshot,
+            games_list,
+            game_detail
         ])
         // 启动 App
         .run(tauri::generate_context!())

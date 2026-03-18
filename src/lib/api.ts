@@ -47,6 +47,44 @@ export type DashboardSnapshot = {
   donut: DonutChartItem[];
 };
 
+export type GameListItem = {
+  id: number;
+  appid: number | null;
+  name: string;
+  cover_path: string | null;
+  is_installed: boolean;
+  total_playtime_seconds: number;
+  total_playtime_formatted: string;
+  last_played_at: number | null;
+  session_count: number;
+};
+
+export type GameDetailSession = {
+  session_id: number;
+  start_time: number;
+  end_time: number | null;
+  duration_seconds: number;
+  formatted: string;
+};
+
+export type GameDetail = {
+  id: number;
+  appid: number | null;
+  name: string;
+  install_path: string | null;
+  cover_path: string | null;
+  is_installed: boolean;
+  created_at: number;
+  updated_at: number;
+  total_playtime_seconds: number;
+  total_playtime_formatted: string;
+  last_played_at: number | null;
+  session_count: number;
+  average_session_seconds: number;
+  average_session_formatted: string;
+  recent_sessions: GameDetailSession[];
+};
+
 export async function hello() {
   return await invoke<string>('hello');
 }
@@ -87,6 +125,25 @@ export async function getDashboardSnapshot(
   return await invoke<DashboardSnapshot>('dashboard_snapshot', {
     days,
     donut_limit: donutLimit,
+    recent_limit: recentLimit,
+  });
+}
+
+export async function getGamesList(
+  search?: string,
+  installedOnly?: boolean,
+  limit = 200,
+) {
+  return await invoke<GameListItem[]>('games_list', {
+    search: search && search.trim().length > 0 ? search.trim() : null,
+    installed_only: installedOnly ?? null,
+    limit,
+  });
+}
+
+export async function getGameDetail(id: number, recentLimit = 20) {
+  return await invoke<GameDetail>('game_detail', {
+    id,
     recent_limit: recentLimit,
   });
 }
