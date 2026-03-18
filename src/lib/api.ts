@@ -38,6 +38,15 @@ export type RecentSessionItem = {
   formatted: string;
 };
 
+export type DashboardSnapshot = {
+  today: DurationSummary;
+  week: DurationSummary;
+  current_playing: CurrentPlayingGame | null;
+  recent_sessions: RecentSessionItem[];
+  daily_chart: DailyChartItem[];
+  donut: DonutChartItem[];
+};
+
 export async function hello() {
   return await invoke<string>('hello');
 }
@@ -68,4 +77,16 @@ export async function getDashboardDonutData(limit?: number) {
 
 export async function getDashboardRecentSessions(limit?: number) {
   return await invoke<RecentSessionItem[]>('dashboard_recent_sessions', { limit });
+}
+
+export async function getDashboardSnapshot(
+  days = 7,
+  donutLimit = 10,
+  recentLimit = 8,
+) {
+  return await invoke<DashboardSnapshot>('dashboard_snapshot', {
+    days,
+    donut_limit: donutLimit,
+    recent_limit: recentLimit,
+  });
 }

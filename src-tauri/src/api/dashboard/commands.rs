@@ -49,58 +49,64 @@ pub struct RecentSessionItem {
     pub formatted: String,
 }
 
+#[derive(Serialize)]
+pub struct DashboardSnapshot {
+    pub today: DurationSummary,
+    pub week: DurationSummary,
+    pub current_playing: Option<CurrentPlayingGame>,
+    pub recent_sessions: Vec<RecentSessionItem>,
+    pub daily_chart: Vec<DailyChartItem>,
+    pub donut: Vec<DonutChartItem>,
+}
+
+#[tauri::command]
+pub fn dashboard_snapshot(
+    days: Option<i64>,
+    donut_limit: Option<i64>,
+    recent_limit: Option<i64>,
+) -> Result<DashboardSnapshot, String> {
+    let conn = get_db_connection()?;
+    let now = current_unix_seconds();
+
+    Ok(DashboardSnapshot {
+        today: query_today_total(&conn, now)?,
+        week: query_week_total(&conn, now)?,
+        current_playing: query_current_playing(&conn, now)?,
+        recent_sessions: query_recent_sessions(&conn, now, recent_limit.unwrap_or(8))?,
+        daily_chart: query_daily_chart(&conn, now, days.unwrap_or(7))?,
+        donut: query_donut_data(&conn, donut_limit.unwrap_or(10))?,
+    })
+}
+
 #[tauri::command]
 pub fn dashboard_today_total() -> Result<DurationSummary, String> {
     let conn = get_db_connection()?;
     let now = current_unix_seconds();
-    let (day_start, day_end) = current_local_day_bounds(now);
-    let seconds = query_overlap_duration(&conn, day_start, day_end, now)?;
-
-    Ok(DurationSummary {
-        seconds,
-        formatted: format_duration(seconds),
-    })
+    query_today_total(&conn, now)
 }
 
 #[tauri::command]
 pub fn dashboard_week_total() -> Result<DurationSummary, String> {
     let conn = get_db_connection()?;
     let now = current_unix_seconds();
-    let (week_start, week_end) = current_local_week_bounds(now);
-    let seconds = query_overlap_duration(&conn, week_start, week_end, now)?;
-
-    Ok(DurationSummary {
-        seconds,
-        formatted: format_duration(seconds),
-    })
+    query_week_total(&conn, now)
 }
 
 #[tauri::command]
 pub fn dashboard_daily_chart(days: Option<i64>) -> Result<Vec<DailyChartItem>, String> {
     let conn = get_db_connection()?;
     let now = current_unix_seconds();
-    let days = days.unwrap_or(7).clamp(1, 30);
-    let (today_start, _) = current_local_day_bounds(now);
-
-    let mut items = Vec::new();
-    for offset in (0..days).rev() {
-        let range_start = today_start - (offset * 86_400);
-        let range_end = range_start + 86_400;
-        let seconds = query_overlap_duration(&conn, range_start, range_end, now)?;
-        items.push(DailyChartItem {
-            day: format_local_day(range_start),
-            seconds,
-            formatted: format_duration(seconds),
-        });
-    }
-
-    Ok(items)
+    query_daily_chart(&conn, now, days.unwrap_or(7))
 }
 
 #[tauri::command]
 pub fn dashboard_current_playing() -> Result<Option<CurrentPlayingGame>, String> {
     let conn = get_db_connection()?;
     let now = current_unix_seconds();
+    query_current_playing(&conn, now)
+}
+
+fn query_current_playing(conn: &Connection, now: i64) -> Result<Option<CurrentPlayingGame>, String> {
     let mut stmt = conn
         .prepare(
             "SELECT s.id, s.game_id, g.name, s.start_time
@@ -135,7 +141,11 @@ pub fn dashboard_current_playing() -> Result<Option<CurrentPlayingGame>, String>
 #[tauri::command]
 pub fn dashboard_donut_data(limit: Option<i64>) -> Result<Vec<DonutChartItem>, String> {
     let conn = get_db_connection()?;
-    let limit = limit.unwrap_or(5).clamp(1, 20);
+    query_donut_data(&conn, limit.unwrap_or(5))
+}
+
+fn query_donut_data(conn: &Connection, limit: i64) -> Result<Vec<DonutChartItem>, String> {
+    let limit = limit.clamp(1, 20);
 
     let total_seconds: i64 = conn
         .query_row(
@@ -183,7 +193,15 @@ pub fn dashboard_donut_data(limit: Option<i64>) -> Result<Vec<DonutChartItem>, S
 pub fn dashboard_recent_sessions(limit: Option<i64>) -> Result<Vec<RecentSessionItem>, String> {
     let conn = get_db_connection()?;
     let now = current_unix_seconds();
-    let limit = limit.unwrap_or(10).clamp(1, 50);
+    query_recent_sessions(&conn, now, limit.unwrap_or(10))
+}
+
+fn query_recent_sessions(
+    conn: &Connection,
+    now: i64,
+    limit: i64,
+) -> Result<Vec<RecentSessionItem>, String> {
+    let limit = limit.clamp(1, 50);
     let mut stmt = conn
         .prepare(
             "SELECT s.id, s.game_id, g.name, s.start_time, s.end_time,
@@ -211,6 +229,45 @@ pub fn dashboard_recent_sessions(limit: Option<i64>) -> Result<Vec<RecentSession
         .map_err(|e| e.to_string())?;
 
     let items = rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())?;
+    Ok(items)
+}
+
+fn query_today_total(conn: &Connection, now: i64) -> Result<DurationSummary, String> {
+    let (day_start, day_end) = current_local_day_bounds(now);
+    let seconds = query_overlap_duration(conn, day_start, day_end, now)?;
+
+    Ok(DurationSummary {
+        seconds,
+        formatted: format_duration(seconds),
+    })
+}
+
+fn query_week_total(conn: &Connection, now: i64) -> Result<DurationSummary, String> {
+    let (week_start, week_end) = current_local_week_bounds(now);
+    let seconds = query_overlap_duration(conn, week_start, week_end, now)?;
+
+    Ok(DurationSummary {
+        seconds,
+        formatted: format_duration(seconds),
+    })
+}
+
+fn query_daily_chart(conn: &Connection, now: i64, days: i64) -> Result<Vec<DailyChartItem>, String> {
+    let days = days.clamp(1, 30);
+    let (today_start, _) = current_local_day_bounds(now);
+
+    let mut items = Vec::new();
+    for offset in (0..days).rev() {
+        let range_start = today_start - (offset * 86_400);
+        let range_end = range_start + 86_400;
+        let seconds = query_overlap_duration(conn, range_start, range_end, now)?;
+        items.push(DailyChartItem {
+            day: format_local_day(range_start),
+            seconds,
+            formatted: format_duration(seconds),
+        });
+    }
+
     Ok(items)
 }
 

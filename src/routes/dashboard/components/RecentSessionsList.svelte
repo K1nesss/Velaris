@@ -22,14 +22,27 @@
       <p class="text-xs font-medium uppercase tracking-[0.24em] text-slate-500 dark:text-slate-400">最近会话</p>
       <!-- <h3 class="mt-2 text-lg font-semibold text-gray-900 dark:text-gray-100">最近游玩记录</h3> -->
     </div>
-    {#if loading}
-      <span class="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-700 dark:bg-slate-800 dark:text-slate-300">
-        加载中
-      </span>
-    {/if}
   </div>
 
-  {#if sessions.length > 0}
+  {#if loading}
+    <div class="mt-4 min-h-0 flex-1 space-y-2 overflow-hidden pr-1">
+      {#each [1, 2, 3] as row (row)}
+        <div class="rounded-xl border border-gray-100 bg-gray-50 p-3 dark:border-gray-800 dark:bg-[#101522]">
+          <div class="flex items-start justify-between gap-3">
+            <div class="min-w-0 flex-1 space-y-2">
+              <div class="h-4 w-2/3 rounded-md skeleton-shimmer"></div>
+              <div class="h-3 w-1/2 rounded-md skeleton-shimmer"></div>
+            </div>
+            <div class="h-5 w-16 rounded-full skeleton-shimmer"></div>
+          </div>
+          <div class="mt-2 flex items-center justify-between gap-3">
+            <div class="h-3 w-16 rounded-md skeleton-shimmer"></div>
+            <div class="h-3 w-24 rounded-md skeleton-shimmer"></div>
+          </div>
+        </div>
+      {/each}
+    </div>
+  {:else if sessions.length > 0}
     <div class="mt-4 min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
       {#each sessions as session (session.session_id)}
         <div class="rounded-xl border border-gray-100 bg-gray-50 p-3 dark:border-gray-800 dark:bg-[#101522]">

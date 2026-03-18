@@ -22,14 +22,27 @@
       <p class="text-xs font-medium uppercase tracking-[0.24em] text-amber-600 dark:text-amber-400">正在游玩</p>
       <!-- <h3 class="mt-2 text-lg font-semibold text-gray-900 dark:text-gray-100">当前进行中的会话</h3> -->
     </div>
-    {#if loading}
-      <span class="rounded-full bg-amber-100 px-3 py-1 text-xs text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
-        加载中
-      </span>
-    {/if}
   </div>
 
-  {#if currentPlaying}
+  {#if loading}
+    <div class="mt-5 space-y-4 lg:flex lg:min-h-0 lg:flex-1 lg:flex-col">
+      <div class="space-y-2">
+        <div class="h-7 w-40 rounded-md skeleton-shimmer"></div>
+        <div class="h-4 w-24 rounded-md skeleton-shimmer"></div>
+      </div>
+
+      <div class="grid gap-3 sm:grid-cols-2 lg:min-h-0 lg:flex-1 lg:content-end">
+        <div class="rounded-xl bg-amber-50 p-4 dark:bg-amber-950/20">
+          <div class="h-3 w-16 rounded-md skeleton-shimmer"></div>
+          <div class="mt-2 h-6 w-24 rounded-md skeleton-shimmer"></div>
+        </div>
+        <div class="rounded-xl bg-gray-50 p-4 dark:bg-[#101522]">
+          <div class="h-3 w-16 rounded-md skeleton-shimmer"></div>
+          <div class="mt-2 h-5 w-32 rounded-md skeleton-shimmer"></div>
+        </div>
+      </div>
+    </div>
+  {:else if currentPlaying}
     <div class="mt-5 space-y-4 lg:flex lg:min-h-0 lg:flex-1 lg:flex-col">
       <div>
         <p class="text-2xl font-semibold text-gray-900 dark:text-gray-100">{currentPlaying.game_name}</p>

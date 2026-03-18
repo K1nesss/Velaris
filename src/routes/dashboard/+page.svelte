@@ -5,12 +5,10 @@
   const SESSION_COMPLETION_POLL_INTERVAL_MS = 5000;
 
   import {
+    getDashboardSnapshot,
     getDashboardCurrentPlaying,
-    getDashboardDailyChart,
-    getDashboardDonutData,
     getDashboardRecentSessions,
-    getDashboardTodayTotal,
-    getDashboardWeekTotal,
+    type DashboardSnapshot,
     type CurrentPlayingGame,
     type DailyChartItem,
     type DonutChartItem,
@@ -34,6 +32,43 @@
   let metricsRefreshing = false;
   let latestCompletedSessionId = $state<number | null>(null);
 
+  const DASHBOARD_CACHE_KEY = 'dashboard_snapshot_cache_v1';
+
+  function applySnapshot(snapshot: DashboardSnapshot) {
+    todayPlaytime = snapshot.today.formatted;
+    weekPlaytime = snapshot.week.formatted;
+    currentPlaying = snapshot.current_playing;
+    recentSessions = snapshot.recent_sessions;
+    dailyChartItems = snapshot.daily_chart;
+    donutItems = snapshot.donut;
+    latestCompletedSessionId = getLatestCompletedSessionId(snapshot.recent_sessions);
+  }
+
+  function cacheSnapshot(snapshot: DashboardSnapshot) {
+    try {
+      localStorage.setItem(DASHBOARD_CACHE_KEY, JSON.stringify(snapshot));
+    } catch (error) {
+      console.warn('Failed to cache dashboard snapshot', error);
+    }
+  }
+
+  function hydrateFromCache() {
+    try {
+      const raw = localStorage.getItem(DASHBOARD_CACHE_KEY);
+      if (!raw) {
+        return false;
+      }
+
+      const snapshot = JSON.parse(raw) as DashboardSnapshot;
+      applySnapshot(snapshot);
+      initialLoading = false;
+      return true;
+    } catch (error) {
+      console.warn('Failed to hydrate dashboard cache', error);
+      return false;
+    }
+  }
+
   function getLatestCompletedSessionId(sessions: RecentSessionItem[]) {
     return sessions.find((session) => session.end_time !== null)?.session_id ?? null;
   }
@@ -49,17 +84,16 @@
     }
 
     try {
-      const [today, week, chart, donut] = await Promise.all([
-        getDashboardTodayTotal(),
-        getDashboardWeekTotal(),
-        getDashboardDailyChart(7),
-        getDashboardDonutData(10),
-      ]);
-
-      todayPlaytime = today.formatted;
-      weekPlaytime = week.formatted;
-      dailyChartItems = chart;
-      donutItems = donut;
+      const snapshot = await getDashboardSnapshot(7, 10, 8);
+      todayPlaytime = snapshot.today.formatted;
+      weekPlaytime = snapshot.week.formatted;
+      dailyChartItems = snapshot.daily_chart;
+      donutItems = snapshot.donut;
+      cacheSnapshot({
+        ...snapshot,
+        current_playing: currentPlaying,
+        recent_sessions: recentSessions,
+      });
     } catch (error) {
       console.error('Failed to refresh dashboard metrics', error);
     } finally {
@@ -88,6 +122,14 @@
         const sessions = await getDashboardRecentSessions(8);
         recentSessions = sessions;
         latestCompletedSessionId = getLatestCompletedSessionId(sessions);
+        cacheSnapshot({
+          today: { seconds: 0, formatted: todayPlaytime },
+          week: { seconds: 0, formatted: weekPlaytime },
+          current_playing: current,
+          recent_sessions: sessions,
+          daily_chart: dailyChartItems,
+          donut: donutItems,
+        });
       }
     } catch (error) {
       console.error('Failed to refresh current playing game', error);
@@ -117,6 +159,15 @@
       // Refresh heavy dashboard metrics only when a new session has ended.
       if (hasNewCompletedSession) {
         await refreshMetrics(false);
+      } else {
+        cacheSnapshot({
+          today: { seconds: 0, formatted: todayPlaytime },
+          week: { seconds: 0, formatted: weekPlaytime },
+          current_playing: currentPlaying,
+          recent_sessions: sessions,
+          daily_chart: dailyChartItems,
+          donut: donutItems,
+        });
       }
     } catch (error) {
       console.error('Failed to check session completion updates', error);
@@ -136,22 +187,9 @@
     }
 
     try {
-      const [today, week, current, sessions, chart, donut] = await Promise.all([
-        getDashboardTodayTotal(),
-        getDashboardWeekTotal(),
-        getDashboardCurrentPlaying(),
-        getDashboardRecentSessions(8),
-        getDashboardDailyChart(7),
-        getDashboardDonutData(10),
-      ]);
-
-      todayPlaytime = today.formatted;
-      weekPlaytime = week.formatted;
-      currentPlaying = current;
-      recentSessions = sessions;
-      dailyChartItems = chart;
-      donutItems = donut;
-      latestCompletedSessionId = getLatestCompletedSessionId(sessions);
+      const snapshot = await getDashboardSnapshot(7, 10, 8);
+      applySnapshot(snapshot);
+      cacheSnapshot(snapshot);
     } catch (error) {
       console.error('Failed to load dashboard data', error);
     } finally {
@@ -163,7 +201,8 @@
   }
 
   onMount(() => {
-    loadDashboardData(true);
+    const hydrated = hydrateFromCache();
+    loadDashboardData(!hydrated);
 
     const currentPlayingIntervalId = window.setInterval(() => {
       refreshCurrentPlaying();
@@ -206,7 +245,11 @@
           <div class="relative z-10 flex items-center justify-between gap-4">
             <div>
               <h3 class="mb-1 text-xs font-medium uppercase tracking-[0.2em] text-cyan-600 dark:text-cyan-400">Today's Playtime</h3>
-              <div class="text-3xl font-bold text-cyan-700 dark:text-cyan-200 sm:text-4xl">{todayPlaytime}</div>
+              {#if initialLoading}
+                <div class="mt-2 h-10 w-36 rounded-lg skeleton-shimmer sm:h-11"></div>
+              {:else}
+                <div class="text-3xl font-bold text-cyan-700 dark:text-cyan-200 sm:text-4xl">{todayPlaytime}</div>
+              {/if}
             </div>
             <div class="relative z-10 flex h-12 w-12 items-center justify-center rounded-full bg-cyan-500/20 text-gray-500 dark:text-gray-300">
               <svg
@@ -232,7 +275,11 @@
           <div class="relative z-10 flex items-center justify-between gap-4">
             <div>
               <h3 class="mb-1 text-xs font-medium uppercase tracking-[0.2em] text-purple-600 dark:text-purple-400">This Week</h3>
-              <div class="text-3xl font-bold text-purple-700 dark:text-purple-200 sm:text-4xl">{weekPlaytime}</div>
+              {#if initialLoading}
+                <div class="mt-2 h-10 w-36 rounded-lg skeleton-shimmer sm:h-11"></div>
+              {:else}
+                <div class="text-3xl font-bold text-purple-700 dark:text-purple-200 sm:text-4xl">{weekPlaytime}</div>
+              {/if}
             </div>
             <div class="relative z-10 flex h-12 w-12 items-center justify-center rounded-full bg-purple-500/20 text-gray-500 dark:text-gray-300">
               <svg

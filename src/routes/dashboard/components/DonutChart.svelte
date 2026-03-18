@@ -148,14 +148,17 @@
       <p class="text-xs font-medium uppercase tracking-[0.24em] text-pink-600 dark:text-pink-400">甜甜圈图</p>
       <!-- <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">ECharts 原生图例滚动示例</p> -->
     </div>
-    {#if loading}
-      <span class="rounded-full bg-pink-100 px-3 py-1 text-xs text-pink-700 dark:bg-pink-950/40 dark:text-pink-300">
-        加载中
-      </span>
-    {/if}
   </div>
 
   <div class="mt-5 rounded-xl bg-white p-3 dark:bg-[#151926]">
-    <div bind:this={container} class="h-64 w-full sm:h-72 lg:h-80 xl:h-88"></div>
+    {#if loading}
+      <div class="flex h-64 w-full items-center justify-center rounded-lg bg-gray-50 dark:bg-[#101522] sm:h-72 lg:h-80 xl:h-88">
+        <div class="relative h-40 w-40 rounded-full skeleton-shimmer sm:h-44 sm:w-44">
+          <div class="absolute inset-6 rounded-full bg-white dark:bg-[#101522]"></div>
+        </div>
+      </div>
+    {:else}
+      <div bind:this={container} class="h-64 w-full sm:h-72 lg:h-80 xl:h-88"></div>
+    {/if}
   </div>
 </article>

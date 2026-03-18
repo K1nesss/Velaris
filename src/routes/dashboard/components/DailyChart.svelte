@@ -130,14 +130,17 @@
       <p class="text-xs font-medium uppercase tracking-[0.24em] text-purple-600 dark:text-purple-400">折线图</p>
       <!-- <h3 class="mt-2 text-lg font-semibold text-gray-900 dark:text-gray-100">最近 7 天游玩趋势</h3> -->
     </div>
-    {#if loading}
-      <span class="rounded-full bg-purple-100 px-3 py-1 text-xs text-purple-700 dark:bg-purple-950/40 dark:text-purple-300">
-        加载中
-      </span>
-    {/if}
   </div>
 
-  {#if items.length > 0}
+  {#if loading}
+    <div class="mt-5 h-64 w-full rounded-xl bg-gray-50 p-4 dark:bg-[#101522] sm:h-72 lg:h-80 xl:h-88">
+      <div class="flex h-full items-end gap-3">
+        {#each [32, 48, 40, 62, 45, 70, 55] as h, index (index)}
+          <div class="flex-1 rounded-t-md skeleton-shimmer" style={`height: ${h}%`}></div>
+        {/each}
+      </div>
+    </div>
+  {:else if items.length > 0}
     <div bind:this={container} class="mt-5 h-64 w-full sm:h-72 lg:h-80 xl:h-88"></div>
   {:else}
     <div class="mt-5 rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 py-8 text-center dark:border-gray-800 dark:bg-[#101522]">
