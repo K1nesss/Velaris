@@ -4,6 +4,20 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::storage::db::get_db_connection;
 
+type GameDetailRow = (
+    i32,
+    Option<i32>,
+    String,
+    Option<String>,
+    Option<String>,
+    i64,
+    i64,
+    i64,
+    i64,
+    Option<i64>,
+    i64,
+);
+
 #[derive(Serialize)]
 pub struct GameListItem {
     pub id: i32,
@@ -132,19 +146,7 @@ pub fn game_detail(id: i64, recent_limit: Option<i64>) -> Result<GameDetail, Str
         total_playtime_seconds,
         last_played_at,
         session_count,
-    ): (
-        i32,
-        Option<i32>,
-        String,
-        Option<String>,
-        Option<String>,
-        i64,
-        i64,
-        i64,
-        i64,
-        Option<i64>,
-        i64,
-    ) = game_stmt
+    ): GameDetailRow = game_stmt
         .query_row([id], |row| {
             Ok((
                 row.get(0)?,
