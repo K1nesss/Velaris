@@ -11,6 +11,19 @@
   let container = $state<HTMLDivElement | null>(null);
   let chart: echarts.ECharts | null = null;
 
+  function formatAxisDuration(value: number) {
+    if (value >= 3600) {
+      const hours = value / 3600;
+      return Number.isInteger(hours) ? `${hours}h` : `${hours.toFixed(1)}h`;
+    }
+
+    if (value >= 60) {
+      return `${Math.round(value / 60)}m`;
+    }
+
+    return `${Math.round(value)}s`;
+  }
+
   function buildOption(chartItems: DailyChartItem[]) {
     const isDark = document.documentElement.classList.contains('dark');
     return {
@@ -52,7 +65,7 @@
         axisLabel: {
           color: isDark ? '#94a3b8' : '#64748b',
           formatter(value: number) {
-            return `${Math.round(value / 3600)}h`;
+            return formatAxisDuration(value);
           },
         },
       },

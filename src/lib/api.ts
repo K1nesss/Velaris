@@ -97,6 +97,56 @@ export type TimelineSessionItem = {
   is_active: boolean;
 };
 
+export type AnalyticsSummary = {
+  total_seconds: number;
+  total_formatted: string;
+  session_count: number;
+  average_session_seconds: number;
+  average_session_formatted: string;
+  active_days: number;
+  longest_session_seconds: number;
+  longest_session_formatted: string;
+};
+
+export type AnalyticsDailyItem = {
+  day: string;
+  seconds: number;
+  formatted: string;
+};
+
+export type AnalyticsHourlyItem = {
+  hour: number;
+  label: string;
+  seconds: number;
+  formatted: string;
+};
+
+export type AnalyticsTopGameItem = {
+  game_id: number;
+  name: string;
+  seconds: number;
+  formatted: string;
+  session_count: number;
+  percentage: number;
+  last_played_at: number | null;
+};
+
+export type AnalyticsWeekdayItem = {
+  weekday: number;
+  label: string;
+  seconds: number;
+  formatted: string;
+  sessions: number;
+};
+
+export type AnalyticsSnapshot = {
+  summary: AnalyticsSummary;
+  daily: AnalyticsDailyItem[];
+  hourly: AnalyticsHourlyItem[];
+  top_games: AnalyticsTopGameItem[];
+  weekday_breakdown: AnalyticsWeekdayItem[];
+};
+
 export async function hello() {
   return await invoke<string>('hello');
 }
@@ -169,5 +219,12 @@ export async function getTimelineSessions(
     limit,
     offset,
     game_id: gameId ?? null,
+  });
+}
+
+export async function getAnalyticsSnapshot(days = 30, topLimit = 8) {
+  return await invoke<AnalyticsSnapshot>('analytics_snapshot', {
+    days,
+    top_limit: topLimit,
   });
 }

@@ -6,6 +6,7 @@ mod core;
 mod storage;
 mod system;
 
+use api::analytics::analytics_snapshot;
 use api::dashboard::{
     dashboard_current_playing, dashboard_daily_chart, dashboard_donut_data,
     dashboard_recent_sessions, dashboard_snapshot, dashboard_today_total, dashboard_week_total,
@@ -70,6 +71,7 @@ fn main() {
             dashboard_donut_data,
             dashboard_recent_sessions,
             dashboard_snapshot,
+            analytics_snapshot,
             games_list,
             game_detail,
             timeline_sessions
