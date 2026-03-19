@@ -1,81 +1,10 @@
 use rusqlite::{Connection, Result};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, SystemTime};
 use sysinfo::System;
-
-// 格式化游玩时长（秒）
-fn format_duration(secs: i64) -> String {
-    let secs = secs.abs();
-    let secs_per_hour = 3600;
-    let secs_per_minute = 60;
-
-    let hours = secs / secs_per_hour;
-    let minutes = (secs % secs_per_hour) / secs_per_minute;
-    let seconds = secs % secs_per_minute;
-
-    if hours > 0 {
-        format!("{}h {}m {}s", hours, minutes, seconds)
-    } else if minutes > 0 {
-        format!("{}m {}s", minutes, seconds)
-    } else {
-        format!("{}s", seconds)
-    }
-}
-
-// 格式化日期时间（UTC+8）
-fn format_datetime(ts: i64) -> String {
-    const TIMEZONE_OFFSET: i64 = 8 * 3600; // UTC+8
-
-    let ts = ts + TIMEZONE_OFFSET; // 加上时区偏移
-    let secs = ts as u64;
-    let days = secs / 86400;
-    let remaining = secs % 86400;
-    let hours = remaining / 3600;
-    let minutes = (remaining % 3600) / 60;
-    let seconds = remaining % 60;
-
-    // 计算年份（从1970年开始）
-    let mut year = 1970;
-    let mut remaining_days = days as i64;
-    loop {
-        let days_in_year = if is_leap_year(year) { 366 } else { 365 };
-        if remaining_days < days_in_year {
-            break;
-        }
-        remaining_days -= days_in_year;
-        year += 1;
-    }
-
-    // 计算月份和日期
-    let month_days = if is_leap_year(year) {
-        [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
-    } else {
-        [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
-    };
-
-    let mut month = 1;
-    for &days in &month_days {
-        if remaining_days < days {
-            break;
-        }
-        remaining_days -= days;
-        month += 1;
-    }
-
-    let day = remaining_days + 1;
-
-    format!(
-        "{:04}-{:02}-{:02} {:02}:{:02}:{:02}",
-        year, month, day, hours, minutes, seconds
-    )
-}
-
-fn is_leap_year(year: i32) -> bool {
-    (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0)
-}
 
 // 游戏会话状态#[derive(Debug, Clone)]
 pub struct GameSession {
@@ -93,12 +22,22 @@ pub struct ProcessWatcher {
 }
 
 impl ProcessWatcher {
+    fn open_connection(db_path: &Path) -> Result<Connection, String> {
+        let conn = Connection::open(db_path).map_err(|e| e.to_string())?;
+        conn.pragma_update(None, "foreign_keys", "ON")
+            .map_err(|e| e.to_string())?;
+        conn.pragma_update(None, "journal_mode", "WAL")
+            .map_err(|e| e.to_string())?;
+        conn.pragma_update(None, "synchronous", "NORMAL")
+            .map_err(|e| e.to_string())?;
+        conn.busy_timeout(Duration::from_secs(3))
+            .map_err(|e| e.to_string())?;
+        Ok(conn)
+    }
+
     // 创建新的进程监控器
     pub fn new(db_path: &Path) -> Result<Self, String> {
-        let conn = Connection::open(db_path).map_err(|e| e.to_string())?;
-
-        // 设置 PRAGMA
-        let _ = conn.execute("PRAGMA foreign_keys = ON;", []);
+        let _ = ProcessWatcher::open_connection(db_path)?;
 
         Ok(Self {
             db_path: db_path.to_path_buf(),
@@ -112,7 +51,7 @@ impl ProcessWatcher {
     pub fn init_game_paths(&mut self) -> Result<(), String> {
         println!("Initializing game paths index...");
 
-        let conn = Connection::open(&self.db_path).map_err(|e| e.to_string())?;
+        let conn = ProcessWatcher::open_connection(&self.db_path)?;
         let mut game_paths = self.game_paths.lock().unwrap();
         game_paths.clear();
 
@@ -145,7 +84,7 @@ impl ProcessWatcher {
     pub fn recover_active_sessions(&mut self) -> Result<(), String> {
         println!("Recovering open game sessions...");
 
-        let conn = Connection::open(&self.db_path).map_err(|e| e.to_string())?;
+        let conn = ProcessWatcher::open_connection(&self.db_path)?;
         let mut active_sessions = self.active_sessions.lock().unwrap();
         active_sessions.clear();
 
@@ -205,9 +144,16 @@ impl ProcessWatcher {
 
         // 启动监控线程
         thread::spawn(move || {
+            let mut system = System::new_all();
+
             loop {
                 // 检查进程
-                ProcessWatcher::check_processes(&db_path, &game_paths, &active_sessions);
+                ProcessWatcher::check_processes(
+                    &db_path,
+                    &game_paths,
+                    &active_sessions,
+                    &mut system,
+                );
 
                 // 休眠指定时间
                 thread::sleep(scan_interval);
@@ -220,130 +166,105 @@ impl ProcessWatcher {
         db_path: &Path,
         game_paths: &Arc<Mutex<HashMap<PathBuf, i32>>>,
         active_sessions: &Arc<Mutex<HashMap<i32, GameSession>>>,
+        system: &mut System,
     ) {
         // 1. 获取所有运行中的进程
-        let mut system = System::new_all();
         system.refresh_all();
 
-        let game_paths = game_paths.lock().unwrap();
-        let mut active_sessions = active_sessions.lock().unwrap();
-        let conn = Connection::open(db_path).unwrap();
+        let conn = match ProcessWatcher::open_connection(db_path) {
+            Ok(conn) => conn,
+            Err(error) => {
+                println!("[Process Watcher] Failed to open database: {}", error);
+                return;
+            }
+        };
 
-        println!("[Process Watcher] Scanning processes...");
+        let indexed_paths: Vec<(PathBuf, i32)> = {
+            let game_paths = game_paths.lock().unwrap();
+            game_paths
+                .iter()
+                .map(|(path, game_id)| (path.clone(), *game_id))
+                .collect()
+        };
 
         // 收集当前运行的游戏进程
-        let mut running_games = HashMap::new();
+        let mut running_games = HashSet::new();
 
         // 2. 遍历进程，找出游戏进程
         for process in system.processes().values() {
             if let Some(exe_path) = process.exe() {
-                // println!("[Process Watcher] Found process: {}", exe_path.display());
-
                 // 检查进程路径是否属于某个游戏的安装目录
-                for (game_path, game_id) in game_paths.iter() {
+                for (game_path, game_id) in &indexed_paths {
                     if exe_path.starts_with(game_path) {
-                        println!(
-                            "[Process Watcher] ✓ Matched game_id: {} (path: {})",
-                            game_id,
-                            game_path.display()
-                        );
-                        running_games.insert(*game_id, ());
+                        running_games.insert(*game_id);
                         break;
                     }
                 }
             }
         }
 
-        println!(
-            "[Process Watcher] Running games: {:?}",
-            running_games.keys().collect::<Vec<_>>()
-        );
+        let (new_games, ended_game_ids) = {
+            let active_sessions = active_sessions.lock().unwrap();
+            let new_games = running_games
+                .iter()
+                .copied()
+                .filter(|game_id| !active_sessions.contains_key(game_id))
+                .collect::<Vec<_>>();
+
+            let ended_game_ids = active_sessions
+                .keys()
+                .copied()
+                .filter(|game_id| !running_games.contains(game_id))
+                .collect::<Vec<_>>();
+
+            (new_games, ended_game_ids)
+        };
 
         // 检查新启动的游戏
-        for game_id in running_games.keys() {
-            if !active_sessions.contains_key(game_id) {
-                // 获取游戏名称
-                let game_name: String = conn
-                    .query_row("SELECT name FROM games WHERE id = ?1", [*game_id], |row| {
-                        row.get(0)
-                    })
-                    .unwrap_or_else(|_| "Unknown".to_string());
+        for game_id in new_games {
+            // 启动新会话
+            match ProcessWatcher::start_session(&conn, game_id) {
+                Ok(session_id) => {
+                    let start_time = SystemTime::now()
+                        .duration_since(SystemTime::UNIX_EPOCH)
+                        .map(|d| d.as_secs())
+                        .unwrap_or(0);
 
-                // 启动新会话
-                match ProcessWatcher::start_session(&conn, *game_id) {
-                    Ok(session_id) => {
-                        let start_time = SystemTime::now()
-                            .duration_since(SystemTime::UNIX_EPOCH)
-                            .map(|d| d.as_secs())
-                            .unwrap_or(0);
-
-                        active_sessions.insert(
-                            *game_id,
-                            GameSession {
-                                game_id: *game_id,
-                                start_time: start_time as i64,
-                                session_id: Some(session_id),
-                            },
-                        );
-
-                        println!(
-                            "[Process Watcher] ✓ Started: {} (Session: {}) - {}",
-                            game_name,
-                            session_id,
-                            format_datetime(start_time as i64)
-                        );
-                    }
-                    Err(e) => {
-                        println!(
-                            "[Process Watcher] ✗ Failed to save session: {} (ID: {}) - {}",
-                            game_name, game_id, e
-                        );
-                    }
+                    let mut active_sessions = active_sessions.lock().unwrap();
+                    active_sessions.insert(
+                        game_id,
+                        GameSession {
+                            game_id,
+                            start_time: start_time as i64,
+                            session_id: Some(session_id),
+                        },
+                    );
+                }
+                Err(e) => {
+                    println!(
+                        "[Process Watcher] Failed to save session (ID: {}) - {}",
+                        game_id, e
+                    );
                 }
             }
         }
 
-        // 检查已结束的游戏
-        let mut ended_games = Vec::new();
-        for (game_id, _) in active_sessions.iter() {
-            if !running_games.contains_key(game_id) {
-                ended_games.push(*game_id);
+        // 从活跃会话中移除已结束游戏
+        let ended_sessions = {
+            let mut active_sessions = active_sessions.lock().unwrap();
+            let mut ended_sessions = Vec::with_capacity(ended_game_ids.len());
+
+            for game_id in ended_game_ids {
+                if let Some(session) = active_sessions.remove(&game_id) {
+                    ended_sessions.push(session);
+                }
             }
-        }
 
-        for game_id in ended_games {
-            if let Some(session) = active_sessions.remove(&game_id) {
-                // 获取游戏名称
-                let game_name: String = conn
-                    .query_row(
-                        "SELECT name FROM games WHERE id = ?1",
-                        [session.game_id],
-                        |row| row.get(0),
-                    )
-                    .unwrap_or_else(|_| "Unknown".to_string());
+            ended_sessions
+        };
 
-                // 获取当前时间作为结束时间
-                let end_time = SystemTime::now()
-                    .duration_since(SystemTime::UNIX_EPOCH)
-                    .map(|d| d.as_secs())
-                    .unwrap_or(0) as i64;
-
-                // 计算游玩时长
-                let duration = end_time - session.start_time;
-
-                // 先保存 start_time 用于打印
-                let start_time = session.start_time;
-
-                // 结束会话
-                ProcessWatcher::end_session(&conn, session);
-                println!(
-                    "[Process Watcher] ✓ Ended: {} - Start: {}, End: {}, Duration: {}",
-                    game_name,
-                    format_datetime(start_time),
-                    format_datetime(end_time),
-                    format_duration(duration)
-                );
-            }
+        for session in ended_sessions {
+            ProcessWatcher::end_session(&conn, session);
         }
     }
 

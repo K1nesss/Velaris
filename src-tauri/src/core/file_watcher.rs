@@ -1,7 +1,5 @@
-use notify::{Config, RecommendedWatcher, RecursiveMode, Watcher};
 use std::collections::HashMap;
 use std::path::Path;
-use std::sync::mpsc;
 use std::thread;
 use std::time::{Duration, SystemTime};
 use steamlocate::SteamDir;
@@ -60,37 +58,6 @@ fn scan_library_files(steam_path: &str) -> LibraryFileMap {
     file_map
 }
 
-// 使用 notify 检测文件变化
-fn run_notify_detection(steam_path: &str) {
-    println!("Starting notify detection for: {}", steam_path);
-
-    let steamapps_path = Path::new(steam_path).join("steamapps");
-
-    let (tx, rx) = mpsc::channel();
-    let config = Config::default()
-        .with_poll_interval(Duration::from_secs(1))
-        .with_compare_contents(true);
-
-    if let Ok(mut watcher) = RecommendedWatcher::new(tx, config) {
-        if watcher
-            .watch(&steamapps_path, RecursiveMode::Recursive)
-            .is_ok()
-        {
-            println!("Notify watching: {}", steamapps_path.display());
-
-            for _ in 0..5 {
-                thread::sleep(Duration::from_secs(1));
-                match rx.recv_timeout(Duration::from_secs(1)) {
-                    Ok(event) => println!("File event: {:?}", event),
-                    Err(_) => continue,
-                }
-            }
-        }
-    }
-
-    println!("Notify detection completed for: {}", steam_path);
-}
-
 // 文件监听服务
 pub fn start_file_watcher(_steam_path: String) {
     println!("=== Starting File Watcher Service ===");
@@ -123,36 +90,16 @@ pub fn start_file_watcher(_steam_path: String) {
         loop {
             thread::sleep(Duration::from_secs(1800)); // 30分钟
 
-            println!("=== Running scheduled detection ===");
-
             let mut has_changes = false;
 
             for (i, path) in library_paths_clone.iter().enumerate() {
-                run_notify_detection(path);
-
                 let current_map = scan_library_files(path);
 
                 if i < initial_maps.len() {
-                    let initial_map = &initial_maps[i];
-
-                    // 检查修改时间变化
-                    for (path_str, current_mtime) in &current_map {
-                        if let Some(old_mtime) = initial_map.get(path_str) {
-                            if old_mtime != current_mtime {
-                                println!("File mtime changed: {}", path_str);
-                                has_changes = true;
-                            }
-                        } else {
-                            println!("File added: {}", path_str);
-                            has_changes = true;
-                        }
-                    }
-
-                    // 检查删除的文件
-                    for path_str in initial_map.keys() {
-                        if !current_map.contains_key(path_str) {
-                            println!("File deleted: {}", path_str);
-                            has_changes = true;
+                    if current_map != initial_maps[i] {
+                        has_changes = true;
+                        if cfg!(debug_assertions) {
+                            println!("Detected Steam library file changes: {}", path);
                         }
                     }
 
@@ -164,8 +111,6 @@ pub fn start_file_watcher(_steam_path: String) {
             if has_changes {
                 println!("Detected file changes, triggering Steam scan...");
                 trigger_steam_scan();
-            } else {
-                println!("No file changes detected");
             }
         }
     });

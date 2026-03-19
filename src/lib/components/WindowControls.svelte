@@ -1,5 +1,46 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
   import { invoke } from '@tauri-apps/api/core';
+
+  let suppressHover = $state(false);
+  let hoverFallbackTimer: number | null = null;
+  let pendingMouseRelease = false;
+
+  function releaseHoverSuppression() {
+    suppressHover = false;
+    pendingMouseRelease = false;
+
+    if (hoverFallbackTimer !== null) {
+      window.clearTimeout(hoverFallbackTimer);
+      hoverFallbackTimer = null;
+    }
+
+    window.removeEventListener('mousemove', releaseHoverSuppression);
+  }
+
+  function clearHoverState() {
+    suppressHover = true;
+    pendingMouseRelease = true;
+
+    const active = document.activeElement;
+    if (active instanceof HTMLElement) {
+      active.blur();
+    }
+
+    window.removeEventListener('mousemove', releaseHoverSuppression);
+    window.addEventListener('mousemove', releaseHoverSuppression, { once: true });
+
+    if (hoverFallbackTimer !== null) {
+      window.clearTimeout(hoverFallbackTimer);
+    }
+
+    // Fallback: release suppression even if no mouse move occurs.
+    hoverFallbackTimer = window.setTimeout(() => {
+      if (pendingMouseRelease) {
+        releaseHoverSuppression();
+      }
+    }, 800);
+  }
 
   async function minimize() {
     await invoke('window_minimize');
@@ -12,25 +53,49 @@
   async function close() {
     await invoke('window_close');
   }
+
+  onMount(() => {
+    const handleFocus = () => {
+      clearHoverState();
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        clearHoverState();
+      }
+    };
+
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      if (hoverFallbackTimer !== null) {
+        window.clearTimeout(hoverFallbackTimer);
+      }
+      window.removeEventListener('mousemove', releaseHoverSuppression);
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  });
 </script>
 
 <div
-  class="fixed left-20 right-0 top-0 z-9999 flex h-7 cursor-default items-stretch justify-end select-none"
+  class={`fixed left-20 right-0 top-0 z-9999 flex h-7 cursor-default items-stretch justify-end select-none ${suppressHover ? 'pointer-events-none' : ''}`}
   data-tauri-drag-region
 >
   <button
-    on:click={minimize}
+    onclick={minimize}
     data-tauri-drag-region="false"
-    class="group h-6 w-10 text-slate-600 transition hover:bg-slate-200 active:bg-slate-300 dark:text-slate-200 dark:hover:bg-slate-700/60 dark:active:bg-slate-700"
+    class={`group h-6 w-10 text-slate-600 transition active:bg-slate-300 dark:text-slate-200 dark:active:bg-slate-700 ${suppressHover ? '' : 'hover:bg-slate-200 dark:hover:bg-slate-700/60'}`}
     title="Minimize"
   >
     <span class="mx-auto block h-px w-3 bg-current opacity-80 group-hover:opacity-100"></span>
   </button>
 
   <button
-    on:click={toggleMaximize}
+    onclick={toggleMaximize}
     data-tauri-drag-region="false"
-    class="group h-6 w-10 text-slate-600 transition hover:bg-slate-200 active:bg-slate-300 dark:text-slate-200 dark:hover:bg-slate-700/60 dark:active:bg-slate-700"
+    class={`group h-6 w-10 text-slate-600 transition active:bg-slate-300 dark:text-slate-200 dark:active:bg-slate-700 ${suppressHover ? '' : 'hover:bg-slate-200 dark:hover:bg-slate-700/60'}`}
     title="Maximize"
   >
     <span class="relative mx-auto block h-3 w-3">
@@ -39,9 +104,9 @@
   </button>
 
   <button
-    on:click={close}
+    onclick={close}
     data-tauri-drag-region="false"
-    class="group h-6 w-12 text-slate-600 transition hover:bg-red-500 hover:text-white active:bg-red-600 dark:text-slate-200"
+    class={`group h-6 w-12 text-slate-600 transition active:bg-red-600 dark:text-slate-200 ${suppressHover ? '' : 'hover:bg-red-500 hover:text-white'}`}
     title="Close"
   >
     <span class="relative mx-auto block h-3 w-3">

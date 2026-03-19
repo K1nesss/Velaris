@@ -1,7 +1,8 @@
-use rusqlite::{Connection, Result};
-use std::path::PathBuf;
+use rusqlite::Result;
 use std::time::SystemTime;
 use steamlocate::SteamDir;
+
+use crate::storage::db::get_db_connection;
 
 #[tauri::command]
 pub fn steam_scan_print() -> Result<(), String> {
@@ -14,22 +15,37 @@ pub fn steam_scan_print() -> Result<(), String> {
     );
 
     // 打开数据库连接
-    let db_path = PathBuf::from("./playtime-tracker.db");
-    println!("Database path: {}", db_path.display());
-    let conn = Connection::open(&db_path).map_err(|e| format!("Failed to open database: {}", e))?;
+    let mut conn = get_db_connection()?;
     println!("Database connection established");
 
-    // 设置 PRAGMA
-    let _ = conn.execute("PRAGMA foreign_keys = ON;", []);
-    println!("PRAGMA foreign_keys = ON");
+    let tx = conn
+        .transaction()
+        .map_err(|e| format!("Failed to start transaction: {}", e))?;
 
     // 先将所有游戏标记为未安装，扫描时会重新标记为已安装
-    conn.execute(
+    tx.execute(
         "UPDATE games SET is_installed = 0, install_path = NULL;",
         [],
     )
     .map_err(|e| format!("Failed to mark games as not installed: {}", e))?;
     println!("Marked all games as not installed");
+
+    let mut upsert_stmt = tx
+        .prepare(
+            "INSERT INTO games (appid, name, install_path, is_installed, created_at, updated_at)
+             VALUES (?1, ?2, ?3, 1, ?4, ?5)
+             ON CONFLICT(appid) DO UPDATE SET
+             name = excluded.name,
+             install_path = excluded.install_path,
+             is_installed = excluded.is_installed,
+             updated_at = excluded.updated_at",
+        )
+        .map_err(|e| format!("Failed to prepare upsert statement: {}", e))?;
+
+    let timestamp = SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0) as i64;
 
     let libraries = steam_dir
         .libraries()
@@ -49,50 +65,33 @@ pub fn steam_scan_print() -> Result<(), String> {
             let name = app.name.as_deref().unwrap_or("<unknown>");
             let install_path = library.resolve_app_dir(&app);
             let install_path_str = install_path.to_str().unwrap_or("");
-            let timestamp = SystemTime::now()
-                .duration_since(SystemTime::UNIX_EPOCH)
-                .map(|d| d.as_secs())
-                .unwrap_or(0);
 
-            // 输出游戏详细信息
-            println!(
-                "  Found game: {} - {} - {}",
-                app.app_id,
-                name,
-                install_path.display()
-            );
             game_count += 1;
 
             // 插入或更新游戏信息到数据库
-            let result = conn.execute(
-                "INSERT INTO games (appid, name, install_path, is_installed, created_at, updated_at) 
-                 VALUES (?1, ?2, ?3, 1, ?4, ?5) 
-                 ON CONFLICT(appid) DO UPDATE SET 
-                 name = excluded.name, 
-                 install_path = excluded.install_path, 
-                 is_installed = excluded.is_installed,
-                 updated_at = excluded.updated_at",
-                (
-                    app.app_id as i32,
-                    name,
-                    install_path_str,
-                    timestamp as i64,
-                    timestamp as i64,
-                ),
-            );
+            let result = upsert_stmt.execute((
+                app.app_id as i32,
+                name,
+                install_path_str,
+                timestamp,
+                timestamp,
+            ));
 
             if let Err(e) = result {
                 println!("    ✗ Error saving to database: {}", e);
             }
-            // match result {
-            //     Ok(_) => println!("    ✓ Saved to database"),
-            //     Err(e) => println!("    ✗ Error saving to database: {}", e),
-            // }
         }
     }
 
+    drop(upsert_stmt);
+    tx.commit()
+        .map_err(|e| format!("Failed to commit Steam scan transaction: {}", e))?;
+
     println!("=== Steam scan completed ===");
-    println!("Found {} libraries and {} games\n", library_count, game_count);
-    
+    println!(
+        "Found {} libraries and {} games\n",
+        library_count, game_count
+    );
+
     Ok(())
 }

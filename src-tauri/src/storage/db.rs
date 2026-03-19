@@ -39,6 +39,9 @@ pub fn init_database() -> Result<(), String> {
         println!("Database initialized successfully");
     }
 
+    ensure_database_indexes(&conn)
+        .map_err(|e| format!("Failed to ensure database indexes: {}", e))?;
+
     Ok(())
 }
 
@@ -221,4 +224,16 @@ fn is_database_initialized(conn: &Connection) -> Result<bool, String> {
         .map_err(|e| e.to_string())?;
     let exists = stmt.exists([]).map_err(|e| e.to_string())?;
     Ok(exists)
+}
+
+fn ensure_database_indexes(conn: &Connection) -> rusqlite::Result<()> {
+    conn.execute_batch(
+        "CREATE INDEX IF NOT EXISTS idx_game_sessions_game_id_start_time ON game_sessions(game_id, start_time DESC);
+         CREATE INDEX IF NOT EXISTS idx_game_sessions_start_time ON game_sessions(start_time DESC);
+         CREATE INDEX IF NOT EXISTS idx_game_sessions_end_time ON game_sessions(end_time);
+         CREATE INDEX IF NOT EXISTS idx_game_sessions_game_id_end_time ON game_sessions(game_id, end_time);
+         CREATE INDEX IF NOT EXISTS idx_games_installed_name ON games(is_installed, name COLLATE NOCASE);
+         CREATE INDEX IF NOT EXISTS idx_games_name_nocase ON games(name COLLATE NOCASE);
+         CREATE INDEX IF NOT EXISTS idx_game_stats_last_played_at ON game_stats(last_played_at);",
+    )
 }
