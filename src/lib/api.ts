@@ -85,6 +85,18 @@ export type GameDetail = {
   recent_sessions: GameDetailSession[];
 };
 
+export type TimelineSessionItem = {
+  session_id: number;
+  game_id: number;
+  appid: number | null;
+  game_name: string;
+  start_time: number;
+  end_time: number | null;
+  duration_seconds: number;
+  formatted: string;
+  is_active: boolean;
+};
+
 export async function hello() {
   return await invoke<string>('hello');
 }
@@ -145,5 +157,17 @@ export async function getGameDetail(id: number, recentLimit = 20) {
   return await invoke<GameDetail>('game_detail', {
     id,
     recent_limit: recentLimit,
+  });
+}
+
+export async function getTimelineSessions(
+  limit = 200,
+  offset = 0,
+  gameId?: number,
+) {
+  return await invoke<TimelineSessionItem[]>('timeline_sessions', {
+    limit,
+    offset,
+    game_id: gameId ?? null,
   });
 }
