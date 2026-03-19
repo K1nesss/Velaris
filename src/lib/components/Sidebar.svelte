@@ -1,10 +1,13 @@
 <script lang="ts">
+  import type { AppLanguage } from '$lib/settings';
+
   // 定义了组件的属性接口，包含暗色模式状态、切换主题函数、当前页面和导航函数。
   interface Props {
     darkMode?: boolean;
     toggleTheme?: () => void;
     currentPage?: string;
     onNavigate?: (page: string) => void;
+    language?: AppLanguage;
   }
 
   // 使用解构赋值从 $props() 获取传入的属性，并设置默认值。
@@ -12,7 +15,8 @@
     darkMode = false,
     toggleTheme = () => {},
     currentPage = 'dashboard',
-    onNavigate = () => {}
+    onNavigate = () => {},
+    language = 'zh-CN'
   }: Props = $props();
 
   // 导入 SVG 作为组件
@@ -28,20 +32,24 @@
   function getLinkClasses(pageName: string) {
     const isActive = currentPage === pageName;
     if (isActive) {
-      return "flex flex-col items-center justify-center w-12 h-12 rounded-xl bg-blue-100 dark:bg-blue-500/20 text-blue-600 dark:text-blue-300 ring-1 ring-blue-200 dark:ring-blue-400/30 shadow-sm transition-all cursor-pointer mb-4";
+      return "mb-4 flex h-12 w-12 cursor-pointer items-center justify-center rounded-2xl border border-blue-200 bg-blue-50 text-blue-700 shadow-sm ring-1 ring-blue-100 transition-all dark:border-blue-800/60 dark:bg-blue-900/35 dark:text-blue-200 dark:ring-blue-900/50";
     }
-    return "flex flex-col items-center justify-center w-12 h-12 rounded-xl text-gray-500 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/12 hover:text-gray-900 dark:hover:text-white transition-colors cursor-pointer mb-4";
+    return "mb-4 flex h-12 w-12 cursor-pointer items-center justify-center rounded-2xl text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-800 dark:text-slate-300 dark:hover:bg-slate-800/70 dark:hover:text-white";
+  }
+
+  function t(zh: string, en: string) {
+    return language === 'zh-CN' ? zh : en;
   }
 </script>
 
-<aside class="w-20 bg-white dark:bg-[#151926] border-r border-gray-200 dark:border-gray-800 flex flex-col items-center py-6 transition-colors duration-200 md:flex shrink-0 z-20">
+<aside class="z-20 flex w-20 shrink-0 flex-col items-center border-r border-(--md-outline) bg-(--md-surface) py-6 transition-colors duration-200 md:flex">
   <nav class="flex-1 w-full flex flex-col items-center">
 
     <!-- Dashboard -->
     <button
       onclick={() => onNavigate('dashboard')}
       class={getLinkClasses('dashboard')}
-      title="Dashboard"
+      title={t('仪表盘', 'Dashboard')}
     >
       {@html DashboardIcon}
     </button>
@@ -50,7 +58,7 @@
     <button
       onclick={() => onNavigate('games')}
       class={getLinkClasses('games')}
-      title="Games Library"
+      title={t('游戏库', 'Games Library')}
     >
       {@html GamesIcon}
     </button>
@@ -59,7 +67,7 @@
     <button
       onclick={() => onNavigate('timeline')}
       class={getLinkClasses('timeline')}
-      title="Timeline"
+      title={t('时间线', 'Timeline')}
     >
       {@html TimelineIcon}
     </button>
@@ -68,7 +76,7 @@
     <button
       onclick={() => onNavigate('analytics')}
       class={getLinkClasses('analytics')}
-      title="Analytics"
+      title={t('分析', 'Analytics')}
     >
       {@html AnalyticsIcon}
     </button>
@@ -77,7 +85,7 @@
     <button
       onclick={() => onNavigate('settings')}
       class={getLinkClasses('settings')}
-      title="Settings"
+      title={t('设置', 'Settings')}
     >
       {@html SettingsIcon}
     </button>
@@ -87,8 +95,8 @@
   <div class="mt-auto">
     <button
       onclick={toggleTheme}
-      class="flex items-center justify-center w-12 h-12 rounded-xl bg-gray-100 dark:bg-gray-800/90 border border-gray-200 dark:border-gray-700 hover:bg-gray-200 dark:hover:bg-gray-700 transition text-gray-600 dark:text-gray-200"
-      title="Toggle Theme"
+      class="flex h-12 w-12 items-center justify-center rounded-2xl border border-(--md-outline) bg-(--md-surface-2) text-slate-600 transition hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"
+      title={t('切换主题', 'Toggle Theme')}
     >
       {#if darkMode}
         {@html SunIcon}

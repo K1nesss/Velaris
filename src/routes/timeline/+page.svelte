@@ -1,8 +1,10 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { getTimelineSessions, type TimelineSessionItem } from '$lib/api';
+  import { loadSettingsFromStorage, type AppLanguage } from '$lib/settings';
 
-  const PAGE_SIZE = 80;
+  let pageSize = $state(80);
+  let language = $state<AppLanguage>('zh-CN');
 
   type TimelineDayGroup = {
     key: string;
@@ -25,6 +27,7 @@
   let loadingMore = $state(false);
   let errorMessage = $state('');
   let search = $state('');
+  let debouncedSearch = $state('');
   let endedOnly = $state(false);
   let selectedGameId = $state('all');
   let durationRange = $state<DurationRange>('all');
@@ -34,6 +37,13 @@
   let hasMore = $state(true);
   let filterPanelRef = $state<HTMLDivElement | null>(null);
   let filterButtonRef = $state<HTMLButtonElement | null>(null);
+  let timelineRequestId = 0;
+
+  const TIMELINE_CACHE_KEY = 'timeline_sessions_cache_v1';
+
+  function t(zh: string, en: string) {
+    return language === 'zh-CN' ? zh : en;
+  }
 
   const accents: Accent[] = [
     {
@@ -68,8 +78,48 @@
     return accents[hash % accents.length];
   }
 
+  function cacheTimelineSessions(items: TimelineSessionItem[]) {
+    try {
+      sessionStorage.setItem(
+        TIMELINE_CACHE_KEY,
+        JSON.stringify({
+          pageSize,
+          items,
+        }),
+      );
+    } catch {
+      // Ignore cache failures.
+    }
+  }
+
+  function hydrateTimelineFromCache() {
+    try {
+      const raw = sessionStorage.getItem(TIMELINE_CACHE_KEY);
+      if (!raw) {
+        return false;
+      }
+
+      const parsed = JSON.parse(raw) as {
+        pageSize: number;
+        items: TimelineSessionItem[];
+      };
+
+      if (parsed.pageSize !== pageSize || !Array.isArray(parsed.items)) {
+        return false;
+      }
+
+      allSessions = parsed.items;
+      hasMore = parsed.items.length === pageSize;
+      buildGroups(parsed.items);
+      loading = false;
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   function formatDateTime(timestamp: number) {
-    return new Intl.DateTimeFormat('zh-CN', {
+    return new Intl.DateTimeFormat(language, {
       month: '2-digit',
       day: '2-digit',
       hour: '2-digit',
@@ -85,10 +135,10 @@
     }).format(new Date(startTime * 1000));
 
     if (!endTime) {
-      return `${start} - 进行中`;
+      return `${start} - ${t('进行中', 'Running')}`;
     }
 
-    const end = new Intl.DateTimeFormat('zh-CN', {
+    const end = new Intl.DateTimeFormat(language, {
       hour: '2-digit',
       minute: '2-digit',
       hour12: false,
@@ -123,7 +173,7 @@
       target.getDate() === today.getDate();
 
     if (isSameDay) {
-      return 'Today';
+      return t('今天', 'Today');
     }
 
     const isYesterday =
@@ -132,10 +182,10 @@
       target.getDate() === yesterday.getDate();
 
     if (isYesterday) {
-      return 'Yesterday';
+      return t('昨天', 'Yesterday');
     }
 
-    return new Intl.DateTimeFormat('zh-CN', {
+    return new Intl.DateTimeFormat(language, {
       month: 'long',
       day: '2-digit',
       weekday: 'short',
@@ -162,7 +212,7 @@
 
     return Array.from(map.entries())
       .map(([id, name]) => ({ id, name }))
-      .sort((a, b) => a.name.localeCompare(b.name, 'zh-CN'));
+      .sort((a, b) => a.name.localeCompare(b.name, language));
   }
 
   function matchDurationRange(item: TimelineSessionItem) {
@@ -197,7 +247,7 @@
         return false;
       }
 
-      const keyword = search.trim().toLowerCase();
+      const keyword = debouncedSearch;
       if (!keyword) {
         return true;
       }
@@ -238,6 +288,8 @@
   }
 
   async function loadTimeline(showLoading: boolean) {
+    const requestId = ++timelineRequestId;
+
     if (showLoading) {
       loading = true;
     } else {
@@ -246,15 +298,25 @@
 
     errorMessage = '';
     try {
-      const data = await getTimelineSessions(PAGE_SIZE, 0);
+      const data = await getTimelineSessions(pageSize, 0);
+      if (requestId !== timelineRequestId) {
+        return;
+      }
+
       allSessions = data;
-      hasMore = data.length === PAGE_SIZE;
+      hasMore = data.length === pageSize;
       buildGroups(allSessions);
+      cacheTimelineSessions(data);
     } catch (error) {
+      if (requestId !== timelineRequestId) {
+        return;
+      }
       errorMessage = error instanceof Error ? error.message : String(error);
     } finally {
-      loading = false;
-      refreshing = false;
+      if (requestId === timelineRequestId) {
+        loading = false;
+        refreshing = false;
+      }
     }
   }
 
@@ -265,10 +327,11 @@
 
     loadingMore = true;
     try {
-      const next = await getTimelineSessions(PAGE_SIZE, allSessions.length);
+      const next = await getTimelineSessions(pageSize, allSessions.length);
       allSessions = [...allSessions, ...next];
-      hasMore = next.length === PAGE_SIZE;
+      hasMore = next.length === pageSize;
       buildGroups(allSessions);
+      cacheTimelineSessions(allSessions);
     } catch (error) {
       errorMessage = error instanceof Error ? error.message : String(error);
     } finally {
@@ -277,7 +340,12 @@
   }
 
   onMount(() => {
-    loadTimeline(true);
+    const settings = loadSettingsFromStorage();
+    pageSize = settings.timelinePageSize;
+    language = settings.language;
+
+    const hydrated = hydrateTimelineFromCache();
+    loadTimeline(!hydrated);
 
     const handlePointerDown = (event: PointerEvent) => {
       if (!showFilterPanel) {
@@ -299,7 +367,18 @@
   });
 
   $effect(() => {
-    search;
+    const rawSearch = search;
+    const timer = window.setTimeout(() => {
+      debouncedSearch = rawSearch.trim().toLowerCase();
+    }, 140);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  });
+
+  $effect(() => {
+    debouncedSearch;
     endedOnly;
     selectedGameId;
     durationRange;
@@ -310,15 +389,15 @@
 <div class="flex h-full flex-col p-4 md:p-8">
   <div class="mb-6 flex shrink-0 flex-wrap items-center justify-between gap-4">
     <div>
-      <h1 class="text-2xl font-bold text-gray-900 dark:text-white">Activity Timeline</h1>
-      <p class="text-sm text-gray-500 dark:text-gray-400">Track your gaming sessions history</p>
+      <h1 class="text-2xl font-bold text-gray-900 dark:text-white">{t('活动时间线', 'Activity Timeline')}</h1>
+      <p class="text-sm text-gray-500 dark:text-gray-400">{t('追踪你的游戏会话历史', 'Track your gaming sessions history')}</p>
     </div>
 
     <div class="flex w-full flex-wrap gap-3 md:w-auto md:flex-nowrap">
       <div class="relative w-full md:w-64">
         <input
           class="h-10 w-full rounded-lg border border-gray-300 bg-white pl-10 pr-4 text-sm text-gray-900 outline-none transition focus:border-blue-500 dark:border-gray-700 dark:bg-[#151926] dark:text-gray-200"
-          placeholder="Search sessions..."
+          placeholder={t('搜索会话...', 'Search sessions...')}
           type="text"
           bind:value={search}
         />
@@ -346,7 +425,7 @@
               ? 'border-blue-500 bg-blue-50 text-blue-600 dark:border-blue-500 dark:bg-blue-950/30 dark:text-blue-300'
               : 'border-gray-300 bg-white text-gray-500 hover:text-gray-700 dark:border-gray-700 dark:bg-[#151926] dark:hover:text-gray-300'
           }`}
-          title="Filter sessions"
+          title={t('筛选会话', 'Filter sessions')}
           onclick={() => {
             showFilterPanel = !showFilterPanel;
           }}
@@ -375,18 +454,18 @@
           >
             <div class="space-y-4">
               <label class="flex cursor-pointer items-center justify-between gap-3 text-sm text-gray-700 dark:text-gray-200">
-                <span>仅已结束</span>
+                <span>{t('仅已结束', 'Ended only')}</span>
                 <input type="checkbox" bind:checked={endedOnly} class="h-4 w-4" />
               </label>
 
               <div class="space-y-2">
-                <label for="timeline-game-filter" class="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">按游戏筛选</label>
+                <label for="timeline-game-filter" class="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">{t('按游戏筛选', 'Filter by game')}</label>
                 <select
                   id="timeline-game-filter"
                   bind:value={selectedGameId}
                   class="h-9 w-full rounded-lg border border-gray-300 bg-white px-2 text-sm text-gray-800 outline-none transition focus:border-blue-500 dark:border-gray-700 dark:bg-[#101522] dark:text-gray-100"
                 >
-                  <option value="all">全部游戏</option>
+                  <option value="all">{t('全部游戏', 'All games')}</option>
                   {#each getGameOptions() as option (option.id)}
                     <option value={String(option.id)}>{option.name}</option>
                   {/each}
@@ -394,17 +473,17 @@
               </div>
 
               <div class="space-y-2">
-                <label for="timeline-duration-filter" class="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">按时长区间</label>
+                <label for="timeline-duration-filter" class="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">{t('按时长区间', 'Filter by duration')}</label>
                 <select
                   id="timeline-duration-filter"
                   bind:value={durationRange}
                   class="h-9 w-full rounded-lg border border-gray-300 bg-white px-2 text-sm text-gray-800 outline-none transition focus:border-blue-500 dark:border-gray-700 dark:bg-[#101522] dark:text-gray-100"
                 >
-                  <option value="all">全部时长</option>
-                  <option value="lt30m">小于 30 分钟</option>
-                  <option value="30to60m">30 分钟 - 1 小时</option>
-                  <option value="1to2h">1 小时 - 2 小时</option>
-                  <option value="gt2h">大于等于 2 小时</option>
+                  <option value="all">{t('全部时长', 'All durations')}</option>
+                  <option value="lt30m">{t('小于 30 分钟', '< 30 minutes')}</option>
+                  <option value="30to60m">{t('30 分钟 - 1 小时', '30 minutes - 1 hour')}</option>
+                  <option value="1to2h">{t('1 小时 - 2 小时', '1 hour - 2 hours')}</option>
+                  <option value="gt2h">{t('大于等于 2 小时', '>= 2 hours')}</option>
                 </select>
               </div>
 
@@ -413,7 +492,7 @@
                   class="rounded-lg border border-gray-300 px-3 py-1.5 text-xs text-gray-700 transition hover:bg-gray-100 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
                   onclick={resetFilters}
                 >
-                  重置
+                  {t('重置', 'Reset')}
                 </button>
                 <button
                   class="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-blue-700"
@@ -421,7 +500,7 @@
                     showFilterPanel = false;
                   }}
                 >
-                  应用
+                  {t('应用', 'Apply')}
                 </button>
               </div>
             </div>
@@ -434,9 +513,9 @@
         disabled={loading || refreshing}
         onclick={() => loadTimeline(false)}
       >
-        <span class={`transition-opacity ${refreshing ? 'opacity-0' : 'opacity-100'}`}>刷新</span>
+        <span class={`transition-opacity ${refreshing ? 'opacity-0' : 'opacity-100'}`}>{t('刷新', 'Refresh')}</span>
         <span class={`absolute inset-0 flex items-center justify-center transition-opacity ${refreshing ? 'opacity-100' : 'opacity-0'}`}>
-          刷新中...
+          {t('刷新中...', 'Refreshing...')}
         </span>
       </button>
     </div>
@@ -445,7 +524,7 @@
   <div class="flex-1 overflow-y-auto pr-2 no-scrollbar min-h-0">
     {#if errorMessage}
       <p class="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-300">
-        加载失败：{errorMessage}
+        {t('加载失败：', 'Load failed: ')}{errorMessage}
       </p>
     {/if}
 
@@ -464,7 +543,7 @@
       </div>
     {:else if groups.length === 0}
       <article class="mx-auto max-w-4xl rounded-2xl border border-dashed border-gray-300 bg-white/80 p-10 text-center dark:border-gray-700 dark:bg-[#151926]">
-        <p class="text-sm text-gray-500 dark:text-gray-400">暂无符合筛选条件的时间线数据</p>
+        <p class="text-sm text-gray-500 dark:text-gray-400">{t('暂无符合筛选条件的时间线数据', 'No timeline data for current filters')}</p>
       </article>
     {:else}
       <div class="mx-auto max-w-4xl space-y-10 pb-8">
@@ -475,7 +554,7 @@
                 {group.label}
               </span>
               <div class="ml-4 h-px flex-1 bg-gray-300 dark:bg-gray-800"></div>
-              <span class="ml-4 text-xs text-gray-500 dark:text-gray-500">{group.totalFormatted} Total</span>
+              <span class="ml-4 text-xs text-gray-500 dark:text-gray-500">{group.totalFormatted} {t('总计', 'Total')}</span>
             </div>
 
             <div class="space-y-4">
@@ -532,7 +611,7 @@
                         <div class="text-right">
                           <div class="font-mono text-2xl font-bold text-gray-900 dark:text-gray-100">{session.formatted}</div>
                           {#if session.is_active}
-                            <div class="mt-0.5 text-xs font-medium text-emerald-500">Running</div>
+                            <div class="mt-0.5 text-xs font-medium text-emerald-500">{t('进行中', 'Running')}</div>
                           {/if}
                         </div>
                         <svg
@@ -554,22 +633,22 @@
                     <div class="border-t border-gray-100 px-4 pb-4 pt-0 dark:border-gray-800/50">
                       <div class="mt-4 grid grid-cols-1 gap-4 md:grid-cols-3">
                         <div class="rounded-lg border border-gray-100 bg-gray-50 p-3 dark:border-gray-800 dark:bg-[#101522]">
-                          <span class="mb-1 block text-xs uppercase tracking-wide text-gray-500">Session ID</span>
+                          <span class="mb-1 block text-xs uppercase tracking-wide text-gray-500">{t('会话ID', 'Session ID')}</span>
                           <div class="text-sm font-medium text-gray-800 dark:text-gray-300">#{session.session_id}</div>
                         </div>
                         <div class="rounded-lg border border-gray-100 bg-gray-50 p-3 dark:border-gray-800 dark:bg-[#101522]">
-                          <span class="mb-1 block text-xs uppercase tracking-wide text-gray-500">Started At</span>
+                          <span class="mb-1 block text-xs uppercase tracking-wide text-gray-500">{t('开始时间', 'Started At')}</span>
                           <div class="text-sm font-medium text-gray-800 dark:text-gray-300">{formatDateTime(session.start_time)}</div>
                         </div>
                         <div class="rounded-lg border border-gray-100 bg-gray-50 p-3 dark:border-gray-800 dark:bg-[#101522]">
-                          <span class="mb-1 block text-xs uppercase tracking-wide text-gray-500">Ended At</span>
-                          <div class="text-sm font-medium text-gray-800 dark:text-gray-300">{session.end_time ? formatDateTime(session.end_time) : 'Still Running'}</div>
+                          <span class="mb-1 block text-xs uppercase tracking-wide text-gray-500">{t('结束时间', 'Ended At')}</span>
+                          <div class="text-sm font-medium text-gray-800 dark:text-gray-300">{session.end_time ? formatDateTime(session.end_time) : t('仍在进行中', 'Still Running')}</div>
                         </div>
                       </div>
 
                       <div class="mt-4 flex items-center justify-between">
                         <a href={`/games/${session.game_id}`} class="text-sm font-medium text-blue-600 transition-colors hover:text-blue-500 dark:text-blue-400 dark:hover:text-blue-300">
-                          查看游戏详情
+                          {t('查看游戏详情', 'View game details')}
                         </a>
                         <span class={`rounded-full px-2.5 py-1 text-xs ${accent.chip}`}>AppID: {session.appid ?? '-'}</span>
                       </div>
@@ -587,7 +666,7 @@
             disabled={!hasMore || loadingMore}
             onclick={loadOlder}
           >
-            {loadingMore ? 'Loading...' : hasMore ? 'Load Older Sessions' : 'No More Sessions'}
+            {loadingMore ? t('加载中...', 'Loading...') : hasMore ? t('加载更早会话', 'Load Older Sessions') : t('没有更多会话', 'No More Sessions')}
           </button>
         </div>
       </div>

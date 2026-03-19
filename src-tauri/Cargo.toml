@@ -28,3 +28,4 @@ sysinfo = "0.36.1"
 rusqlite = { version = "0.31.0", features = ["bundled"] }
 notify = "8.2.0"
 glob = "0.3.1"
+base64 = "0.22.1"

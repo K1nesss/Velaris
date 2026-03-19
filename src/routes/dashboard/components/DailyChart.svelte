@@ -1,12 +1,18 @@
 <script lang="ts">
   import type { DailyChartItem } from '$lib/api';
+  import type { AppLanguage } from '$lib/settings';
   import { onMount } from 'svelte';
   import * as echarts from 'echarts';
 
-  let { items = [], loading = false } = $props<{
+  let { items = [], loading = false, language = 'zh-CN' } = $props<{
     items?: DailyChartItem[];
     loading?: boolean;
+    language?: AppLanguage;
   }>();
+
+  function t(zh: string, en: string) {
+    return language === 'zh-CN' ? zh : en;
+  }
 
   let container = $state<HTMLDivElement | null>(null);
   let chart: echarts.ECharts | null = null;
@@ -37,7 +43,7 @@
         },
         formatter(params: Array<{ axisValue: string; data: number }>) {
           const point = params[0];
-          return `${point.axisValue}<br/>${Math.round(point.data / 60)} 分钟`;
+          return `${point.axisValue}<br/>${Math.round(point.data / 60)} ${t('分钟', 'minutes')}`;
         },
       },
       grid: {
@@ -140,7 +146,7 @@
 <article class="rounded-2xl border border-purple-200/60 bg-white/90 p-5 shadow-sm backdrop-blur-sm dark:border-purple-900/60 dark:bg-[#151926]">
   <div class="flex items-center justify-between gap-3">
     <div>
-      <p class="text-xs font-medium uppercase tracking-[0.24em] text-purple-600 dark:text-purple-400">折线图</p>
+      <p class="text-xs font-medium uppercase tracking-[0.24em] text-purple-600 dark:text-purple-400">{t('折线图', 'Line Chart')}</p>
       <!-- <h3 class="mt-2 text-lg font-semibold text-gray-900 dark:text-gray-100">最近 7 天游玩趋势</h3> -->
     </div>
   </div>
@@ -157,7 +163,7 @@
     <div bind:this={container} class="mt-5 h-64 w-full sm:h-72 lg:h-80 xl:h-88"></div>
   {:else}
     <div class="mt-5 rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 py-8 text-center dark:border-gray-800 dark:bg-[#101522]">
-      <p class="text-sm text-gray-500 dark:text-gray-400">暂无折线图数据</p>
+      <p class="text-sm text-gray-500 dark:text-gray-400">{t('暂无折线图数据', 'No line chart data')}</p>
     </div>
   {/if}
 </article>

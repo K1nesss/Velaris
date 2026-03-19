@@ -1,14 +1,20 @@
 <script lang="ts">
   import type { DonutChartItem } from '$lib/api';
+  import type { AppLanguage } from '$lib/settings';
   import { onMount } from 'svelte';
   import * as echarts from 'echarts';
 
   const LEGEND_SCROLL_THRESHOLD = 5;
 
-  let { items = [], loading = false } = $props<{
+  let { items = [], loading = false, language = 'zh-CN' } = $props<{
     items?: DonutChartItem[];
     loading?: boolean;
+    language?: AppLanguage;
   }>();
+
+  function t(zh: string, en: string) {
+    return language === 'zh-CN' ? zh : en;
+  }
 
   let container = $state<HTMLDivElement | null>(null);
   let chart: echarts.ECharts | null = null;
@@ -145,7 +151,7 @@
 <article class="rounded-2xl border border-pink-200/60 bg-white p-5 shadow-sm dark:border-pink-900/60 dark:bg-[#151926]">
   <div class="flex items-center justify-between gap-3">
     <div>
-      <p class="text-xs font-medium uppercase tracking-[0.24em] text-pink-600 dark:text-pink-400">甜甜圈图</p>
+      <p class="text-xs font-medium uppercase tracking-[0.24em] text-pink-600 dark:text-pink-400">{t('甜甜圈图', 'Donut Chart')}</p>
       <!-- <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">ECharts 原生图例滚动示例</p> -->
     </div>
   </div>

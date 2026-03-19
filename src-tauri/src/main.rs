@@ -17,7 +17,7 @@ use core::file_watcher::start_file_watcher;
 use core::process_watcher::start_process_monitor;
 use core::steam_scanner::steam_scan_print;
 use steamlocate::SteamDir;
-use storage::db::{init_database, print_database_tables};
+use storage::db::{export_database, import_database, init_database, print_database_tables};
 use system::controls::{window_close, window_minimize, window_toggle_maximize};
 
 #[tauri::command]
@@ -64,6 +64,8 @@ fn main() {
             window_close,
             init_database,
             print_database_tables,
+            export_database,
+            import_database,
             dashboard_today_total,
             dashboard_week_total,
             dashboard_daily_chart,

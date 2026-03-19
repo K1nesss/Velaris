@@ -155,6 +155,16 @@ export async function printDatabaseTables() {
   await invoke('print_database_tables');
 }
 
+export async function exportDatabase() {
+  return await invoke<string>('export_database');
+}
+
+export async function importDatabase(base64Data: string) {
+  await invoke('import_database', {
+    base64_data: base64Data,
+  });
+}
+
 export async function getDashboardTodayTotal() {
   return await invoke<DurationSummary>('dashboard_today_total');
 }

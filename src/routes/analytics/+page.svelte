@@ -1,14 +1,10 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { getAnalyticsSnapshot, type AnalyticsSnapshot } from '$lib/api';
+  import { loadSettingsFromStorage, type AppLanguage } from '$lib/settings';
   import * as echarts from 'echarts';
 
-  const RANGE_OPTIONS = [
-    { label: '一天', value: 1 },
-    { label: '一周', value: 7 },
-    { label: '一月', value: 30 },
-    { label: '一年', value: 365 },
-  ];
+  const RANGE_OPTIONS = [1, 7, 30, 365] as const;
 
   const BAR_COLORS = ['#a855f7', '#f97316', '#22c55e', '#3b82f6', '#eab308', '#ef4444', '#0ea5e9', '#14b8a6'];
 
@@ -17,6 +13,10 @@
   let refreshing = $state(false);
   let errorMessage = $state('');
   let snapshot = $state<AnalyticsSnapshot | null>(null);
+  let language = $state<AppLanguage>('zh-CN');
+  let analyticsRequestId = 0;
+
+  const ANALYTICS_CACHE_KEY_PREFIX = 'analytics_snapshot_cache_v1';
 
     let topGamesContainer = $state<HTMLDivElement | null>(null);
     let distributionContainer = $state<HTMLDivElement | null>(null);
@@ -26,15 +26,26 @@
     let distributionChart: echarts.ECharts | null = null;
     let trendChart: echarts.ECharts | null = null;
 
+    function t(zh: string, en: string) {
+      return language === 'zh-CN' ? zh : en;
+    }
+
+    function rangeLabel(days: (typeof RANGE_OPTIONS)[number]) {
+      if (days === 1) return t('一天', '1 Day');
+      if (days === 7) return t('一周', '7 Days');
+      if (days === 30) return t('一月', '30 Days');
+      return t('一年', '1 Year');
+    }
+
     function formatNumber(value: number) {
-      return new Intl.NumberFormat('zh-CN').format(value);
+      return new Intl.NumberFormat(language).format(value);
     }
 
     function formatDate(timestamp: number | null) {
       if (!timestamp) {
         return '-';
       }
-      return new Intl.DateTimeFormat('zh-CN', {
+      return new Intl.DateTimeFormat(language, {
         month: '2-digit',
         day: '2-digit',
         hour: '2-digit',
@@ -93,6 +104,30 @@
         return `${Math.round(value / 60)}m`;
       }
       return `${Math.round(value)}s`;
+    }
+
+    function getAnalyticsCacheKey(days: number) {
+      return `${ANALYTICS_CACHE_KEY_PREFIX}:${days}`;
+    }
+
+    function cacheAnalytics(days: number, data: AnalyticsSnapshot) {
+      try {
+        sessionStorage.setItem(getAnalyticsCacheKey(days), JSON.stringify(data));
+      } catch {
+        // Ignore cache failures.
+      }
+    }
+
+    function readAnalyticsCache(days: number) {
+      try {
+        const raw = sessionStorage.getItem(getAnalyticsCacheKey(days));
+        if (!raw) {
+          return null;
+        }
+        return JSON.parse(raw) as AnalyticsSnapshot;
+      } catch {
+        return null;
+      }
     }
 
     type TrendPoint = {
@@ -303,7 +338,7 @@
         series: [
           ...(isHourlyView
             ? [{
-                name: '每小时',
+                name: t('每小时', 'Hourly'),
                 type: 'bar',
                 barWidth: 12,
                 z: 1,
@@ -318,7 +353,7 @@
               }]
             : []),
           {
-            name: isHourlyView ? '监控曲线' : '趋势',
+            name: isHourlyView ? t('监控曲线', 'Monitoring Trend') : t('趋势', 'Trend'),
             type: 'line',
             smooth: !isHourlyView,
             symbol: 'circle',
@@ -338,7 +373,7 @@
                   lineStyle: { type: 'dashed', color: isDark ? '#f59e0b' : '#d97706' },
                   label: {
                     color: isDark ? '#fcd34d' : '#92400e',
-                    formatter: `均值 ${formatDurationCompact(average)}`,
+                    formatter: `${t('均值', 'Average')} ${formatDurationCompact(average)}`,
                   },
                   data: [{ yAxis: average }],
                 }
@@ -380,6 +415,8 @@
     }
 
     async function loadAnalytics(showLoading: boolean) {
+      const requestId = ++analyticsRequestId;
+
       if (showLoading) {
         loading = true;
       } else {
@@ -388,12 +425,24 @@
 
       errorMessage = '';
       try {
-        snapshot = await getAnalyticsSnapshot(selectedDays, 8);
+        const days = selectedDays;
+        const next = await getAnalyticsSnapshot(days, 8);
+        if (requestId !== analyticsRequestId) {
+          return;
+        }
+
+        snapshot = next;
+        cacheAnalytics(days, next);
       } catch (error) {
+        if (requestId !== analyticsRequestId) {
+          return;
+        }
         errorMessage = error instanceof Error ? error.message : String(error);
       } finally {
-        loading = false;
-        refreshing = false;
+        if (requestId === analyticsRequestId) {
+          loading = false;
+          refreshing = false;
+        }
       }
     }
 
@@ -402,11 +451,28 @@
         return;
       }
       selectedDays = days;
+
+      const cached = readAnalyticsCache(days);
+      if (cached) {
+        snapshot = cached;
+        loading = false;
+      }
+
       void loadAnalytics(false);
     }
 
     onMount(() => {
-      void loadAnalytics(true);
+      const settings = loadSettingsFromStorage();
+      selectedDays = settings.analyticsDefaultRange;
+      language = settings.language;
+
+      const cached = readAnalyticsCache(selectedDays);
+      if (cached) {
+        snapshot = cached;
+        loading = false;
+      }
+
+      void loadAnalytics(!cached);
 
       const onResize = () => {
         topGamesChart?.resize();
@@ -458,20 +524,20 @@
       <div class="mb-8 flex flex-col items-start justify-between gap-4 md:flex-row md:items-center">
         <div>
           <h1 class="text-2xl font-bold text-gray-800 dark:text-white">Analytics Overview</h1>
-          <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">深度分析你的游玩习惯与统计数据</p>
+          <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">{t('深度分析你的游玩习惯与统计数据', 'Analyze your play habits and statistics in depth')}</p>
         </div>
 
         <div class="inline-flex rounded-lg border border-gray-200 bg-white p-1 shadow-sm dark:border-gray-700 dark:bg-[#151926]">
-          {#each RANGE_OPTIONS as option (option.value)}
+          {#each RANGE_OPTIONS as days (days)}
             <button
               class={`rounded-md px-4 py-2 text-sm font-medium transition-colors ${
-                selectedDays === option.value
+                selectedDays === days
                   ? 'border border-blue-200 bg-blue-50 text-blue-600 dark:border-blue-800/50 dark:bg-blue-900/30 dark:text-blue-400'
                   : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white'
               }`}
-              onclick={() => selectRange(option.value)}
+              onclick={() => selectRange(days)}
             >
-              {option.label}
+              {rangeLabel(days)}
             </button>
           {/each}
         </div>
@@ -486,13 +552,13 @@
       <div class="mb-8 grid grid-cols-1 gap-6 md:grid-cols-3">
         <div class="relative flex items-center justify-between overflow-hidden rounded-xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-[#151926]">
           <div class="relative z-10">
-            <h3 class="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">总游玩时长</h3>
+            <h3 class="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">{t('总游玩时长', 'Total Playtime')}</h3>
             {#if loading || !snapshot}
               <div class="h-8 w-24 rounded-md skeleton-shimmer"></div>
             {:else}
               <div class="text-2xl font-bold text-gray-900 dark:text-white">{snapshot.summary.total_formatted}</div>
               <div class="mt-1 inline-flex items-center rounded px-2 py-0.5 text-xs font-medium {snapshot.summary.active_days > 0 ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'}">
-                活跃 {snapshot.summary.active_days} 天
+                {t('活跃', 'Active')} {snapshot.summary.active_days} {t('天', 'days')}
               </div>
             {/if}
           </div>
@@ -506,12 +572,12 @@
 
         <div class="relative flex items-center justify-between overflow-hidden rounded-xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-[#151926]">
           <div class="relative z-10">
-            <h3 class="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">平均会话时长</h3>
+            <h3 class="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">{t('平均会话时长', 'Average Session')}</h3>
             {#if loading || !snapshot}
               <div class="h-8 w-24 rounded-md skeleton-shimmer"></div>
             {:else}
               <div class="text-2xl font-bold text-gray-900 dark:text-white">{snapshot.summary.average_session_formatted}</div>
-              <div class="mt-1 text-xs text-gray-500 dark:text-gray-400">共 {formatNumber(snapshot.summary.session_count)} 次会话</div>
+              <div class="mt-1 text-xs text-gray-500 dark:text-gray-400">{t('共', 'Total ')} {formatNumber(snapshot.summary.session_count)} {t('次会话', 'sessions')}</div>
             {/if}
           </div>
           <div class="relative z-10 flex h-12 w-12 items-center justify-center rounded-full bg-cyan-100 dark:bg-cyan-900/30">
@@ -524,12 +590,12 @@
 
         <div class="relative flex items-center justify-between overflow-hidden rounded-xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-[#151926]">
           <div class="relative z-10">
-            <h3 class="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">最长单次会话</h3>
+            <h3 class="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">{t('最长单次会话', 'Longest Session')}</h3>
             {#if loading || !snapshot}
               <div class="h-8 w-24 rounded-md skeleton-shimmer"></div>
             {:else}
               <div class="text-2xl font-bold text-gray-900 dark:text-white">{snapshot.summary.longest_session_formatted}</div>
-              <div class="mt-1 text-xs text-gray-500 dark:text-gray-400">当前筛选区间内统计</div>
+              <div class="mt-1 text-xs text-gray-500 dark:text-gray-400">{t('当前筛选区间内统计', 'Statistics within current range')}</div>
             {/if}
           </div>
           <div class="relative z-10 flex h-12 w-12 items-center justify-center rounded-full bg-blue-100 dark:bg-blue-900/30">
@@ -545,7 +611,7 @@
       <div class="mb-8 grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div class="flex h-96 flex-col rounded-xl border border-gray-200 bg-white p-6 shadow-sm transition-colors duration-200 dark:border-gray-800 dark:bg-[#151926] lg:col-span-2">
           <div class="mb-6 flex items-center justify-between">
-            <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100">Top Games by Playtime</h2>
+            <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100">{t('游玩时长 Top 游戏', 'Top Games by Playtime')}</h2>
           </div>
           <div class="min-h-0 flex-1">
             {#if loading || !snapshot}
@@ -557,14 +623,14 @@
         </div>
 
         <div class="flex h-96 flex-col rounded-xl border border-gray-200 bg-white p-6 shadow-sm transition-colors duration-200 dark:border-gray-800 dark:bg-[#151926]">
-          <h2 class="mb-6 text-lg font-semibold text-gray-800 dark:text-gray-100">Playtime Distribution</h2>
+          <h2 class="mb-6 text-lg font-semibold text-gray-800 dark:text-gray-100">{t('游玩时长分布', 'Playtime Distribution')}</h2>
           <div class="relative min-h-0 flex-1">
             {#if loading || !snapshot}
               <div class="h-full rounded-xl skeleton-shimmer"></div>
             {:else}
               <div bind:this={distributionContainer} class="h-full w-full"></div>
               <div class="pointer-events-none absolute inset-0 flex items-center justify-center">
-                <span class="rounded bg-white/80 px-2 py-1 text-xs font-medium text-gray-500 dark:bg-[#151926]/80 dark:text-gray-400">By Time</span>
+                <span class="rounded bg-white/80 px-2 py-1 text-xs font-medium text-gray-500 dark:bg-[#151926]/80 dark:text-gray-400">{t('按时长', 'By Time')}</span>
               </div>
             {/if}
           </div>
@@ -582,21 +648,21 @@
       </div>
 
       <div class="mb-8 rounded-xl border border-gray-200 bg-white p-6 shadow-sm transition-colors duration-200 dark:border-gray-800 dark:bg-[#151926]">
-        <h2 class="mb-4 text-lg font-semibold text-gray-800 dark:text-gray-100">{selectedDays === 1 ? 'Hourly Trend' : 'Daily Trend'}</h2>
+        <h2 class="mb-4 text-lg font-semibold text-gray-800 dark:text-gray-100">{selectedDays === 1 ? t('小时趋势', 'Hourly Trend') : t('每日趋势', 'Daily Trend')}</h2>
 
         {#if selectedDays === 1 && snapshot}
           {@const hourlyInsights = getHourlyInsights(snapshot)}
           <div class="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
             <div class="rounded-lg border border-cyan-200 bg-cyan-50/60 px-3 py-2 dark:border-cyan-900/50 dark:bg-cyan-950/20">
-              <p class="text-[11px] uppercase tracking-wide text-cyan-700 dark:text-cyan-300">峰值时段</p>
+              <p class="text-[11px] uppercase tracking-wide text-cyan-700 dark:text-cyan-300">{t('峰值时段', 'Peak Slot')}</p>
               <p class="mt-1 text-sm font-semibold text-gray-900 dark:text-gray-100">{hourlyInsights.peakLabel} · {hourlyInsights.peakValue}</p>
             </div>
             <div class="rounded-lg border border-indigo-200 bg-indigo-50/60 px-3 py-2 dark:border-indigo-900/50 dark:bg-indigo-950/20">
-              <p class="text-[11px] uppercase tracking-wide text-indigo-700 dark:text-indigo-300">当前时段</p>
+              <p class="text-[11px] uppercase tracking-wide text-indigo-700 dark:text-indigo-300">{t('当前时段', 'Current Slot')}</p>
               <p class="mt-1 text-sm font-semibold text-gray-900 dark:text-gray-100">{hourlyInsights.currentLabel} · {hourlyInsights.currentValue}</p>
             </div>
             <div class="rounded-lg border border-amber-200 bg-amber-50/60 px-3 py-2 dark:border-amber-900/50 dark:bg-amber-950/20">
-              <p class="text-[11px] uppercase tracking-wide text-amber-700 dark:text-amber-300">小时均值</p>
+              <p class="text-[11px] uppercase tracking-wide text-amber-700 dark:text-amber-300">{t('小时均值', 'Hourly Avg')}</p>
               <p class="mt-1 text-sm font-semibold text-gray-900 dark:text-gray-100">{hourlyInsights.avgValue}</p>
             </div>
           </div>
@@ -613,20 +679,20 @@
 
       <div class="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm transition-colors duration-200 dark:border-gray-800 dark:bg-[#151926]">
         <div class="flex items-center justify-between border-b border-gray-200 p-6 dark:border-gray-800">
-          <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100">Detailed Game Statistics</h2>
-          <span class="text-sm text-gray-500 dark:text-gray-400">按当前区间统计</span>
+          <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100">{t('详细游戏统计', 'Detailed Game Statistics')}</h2>
+          <span class="text-sm text-gray-500 dark:text-gray-400">{t('按当前区间统计', 'Statistics in current range')}</span>
         </div>
 
         <div class="overflow-x-auto">
           <table class="w-full text-left text-sm">
             <thead class="bg-gray-50 text-xs font-medium uppercase text-gray-500 dark:bg-white/5 dark:text-gray-400">
               <tr>
-                <th class="px-6 py-4">Game</th>
-                <th class="px-6 py-4">Total Time</th>
-                <th class="px-6 py-4">Sessions</th>
-                <th class="px-6 py-4">Avg. Session</th>
-                <th class="px-6 py-4">Last Played</th>
-                <th class="px-6 py-4 text-right">Trend</th>
+                <th class="px-6 py-4">{t('游戏', 'Game')}</th>
+                <th class="px-6 py-4">{t('总时长', 'Total Time')}</th>
+                <th class="px-6 py-4">{t('会话数', 'Sessions')}</th>
+                <th class="px-6 py-4">{t('平均会话', 'Avg. Session')}</th>
+                <th class="px-6 py-4">{t('最后游玩', 'Last Played')}</th>
+                <th class="px-6 py-4 text-right">{t('趋势', 'Trend')}</th>
               </tr>
             </thead>
 
@@ -644,7 +710,7 @@
                 {/each}
               {:else if snapshot.top_games.length === 0}
                 <tr>
-                  <td colspan="6" class="px-6 py-10 text-center text-sm text-gray-500 dark:text-gray-400">当前区间没有可展示的数据</td>
+                  <td colspan="6" class="px-6 py-10 text-center text-sm text-gray-500 dark:text-gray-400">{t('当前区间没有可展示的数据', 'No data available in current range')}</td>
                 </tr>
               {:else}
                 {#each snapshot.top_games as game, index (game.game_id)}

@@ -1,5 +1,7 @@
+use base64::{engine::general_purpose, Engine as _};
 use rusqlite::{Connection, Result};
 use std::fs::read_to_string;
+use std::fs::{read, remove_file, write};
 use std::path::PathBuf;
 
 #[tauri::command]
@@ -154,6 +156,49 @@ pub fn print_database_tables() {
             println!("Error getting database connection: {}", e);
         }
     }
+}
+
+#[tauri::command]
+pub fn export_database() -> Result<String, String> {
+    let db_path = get_db_path()?;
+
+    if !db_path.exists() {
+        return Err("Database file not found".to_string());
+    }
+
+    if let Ok(conn) = Connection::open(&db_path) {
+        let _ = apply_connection_pragmas(&conn);
+        let _ = conn.execute_batch("PRAGMA wal_checkpoint(FULL);");
+    }
+
+    let bytes = read(&db_path).map_err(|e| format!("Failed to read database file: {}", e))?;
+    Ok(general_purpose::STANDARD.encode(bytes))
+}
+
+#[tauri::command]
+pub fn import_database(base64_data: String) -> Result<(), String> {
+    let db_path = get_db_path()?;
+    let decoded = general_purpose::STANDARD
+        .decode(base64_data)
+        .map_err(|e| format!("Invalid database payload: {}", e))?;
+
+    if decoded.is_empty() {
+        return Err("Imported database payload is empty".to_string());
+    }
+
+    write(&db_path, decoded).map_err(|e| format!("Failed to write database file: {}", e))?;
+
+    let wal_path = PathBuf::from(format!("{}-wal", db_path.display()));
+    let shm_path = PathBuf::from(format!("{}-shm", db_path.display()));
+
+    if wal_path.exists() {
+        let _ = remove_file(wal_path);
+    }
+    if shm_path.exists() {
+        let _ = remove_file(shm_path);
+    }
+
+    Ok(())
 }
 
 fn get_db_path() -> Result<PathBuf, String> {

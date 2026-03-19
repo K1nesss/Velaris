@@ -15,13 +15,13 @@
 </script>
 
 <div
-  class="fixed left-20 right-0 top-0 z-9999 flex h-6 items-stretch justify-end select-none cursor-default"
+  class="fixed left-20 right-0 top-0 z-9999 flex h-7 cursor-default items-stretch justify-end select-none"
   data-tauri-drag-region
 >
   <button
     on:click={minimize}
     data-tauri-drag-region="false"
-    class="group h-6 w-10 text-gray-600 transition hover:bg-gray-200 active:bg-gray-300 dark:text-gray-200 dark:hover:bg-white/10 dark:active:bg-white/20"
+    class="group h-6 w-10 text-slate-600 transition hover:bg-slate-200 active:bg-slate-300 dark:text-slate-200 dark:hover:bg-slate-700/60 dark:active:bg-slate-700"
     title="Minimize"
   >
     <span class="mx-auto block h-px w-3 bg-current opacity-80 group-hover:opacity-100"></span>
@@ -30,7 +30,7 @@
   <button
     on:click={toggleMaximize}
     data-tauri-drag-region="false"
-    class="group h-6 w-10 text-gray-600 transition hover:bg-gray-200 active:bg-gray-300 dark:text-gray-200 dark:hover:bg-white/10 dark:active:bg-white/20"
+    class="group h-6 w-10 text-slate-600 transition hover:bg-slate-200 active:bg-slate-300 dark:text-slate-200 dark:hover:bg-slate-700/60 dark:active:bg-slate-700"
     title="Maximize"
   >
     <span class="relative mx-auto block h-3 w-3">
@@ -41,7 +41,7 @@
   <button
     on:click={close}
     data-tauri-drag-region="false"
-    class="group h-6 w-12 text-gray-600 transition hover:bg-red-500 hover:text-white active:bg-red-600 dark:text-gray-200"
+    class="group h-6 w-12 text-slate-600 transition hover:bg-red-500 hover:text-white active:bg-red-600 dark:text-slate-200"
     title="Close"
   >
     <span class="relative mx-auto block h-3 w-3">

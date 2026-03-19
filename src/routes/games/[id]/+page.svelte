@@ -1,18 +1,24 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { getGameDetail, type GameDetail } from '$lib/api';
+	import { loadSettingsFromStorage, type AppLanguage } from '$lib/settings';
 
 	let { data } = $props<{ data: { gameId: number } }>();
 
 	let loading = $state(true);
 	let errorMessage = $state('');
 	let detail = $state<GameDetail | null>(null);
+	let language = $state<AppLanguage>('zh-CN');
+
+	function t(zh: string, en: string) {
+		return language === 'zh-CN' ? zh : en;
+	}
 
 	function formatDateTime(timestamp: number | null) {
 		if (!timestamp) {
 			return '-';
 		}
-		return new Intl.DateTimeFormat('zh-CN', {
+		return new Intl.DateTimeFormat(language, {
 			year: 'numeric',
 			month: '2-digit',
 			day: '2-digit',
@@ -35,6 +41,8 @@
 	}
 
 	onMount(() => {
+		const settings = loadSettingsFromStorage();
+		language = settings.language;
 		loadDetail();
 	});
 </script>
@@ -45,13 +53,13 @@
 			href="/games"
 			class="inline-flex items-center rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-700 transition hover:bg-gray-100 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
 		>
-			返回游戏库
+			{t('返回游戏库', 'Back to Games')}
 		</a>
 		<button
 			onclick={loadDetail}
 			class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700"
 		>
-			刷新
+			{t('刷新', 'Refresh')}
 		</button>
 	</div>
 
@@ -67,7 +75,7 @@
 		</article>
 	{:else if errorMessage}
 		<article class="rounded-2xl border border-red-200 bg-red-50 p-6 text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-300">
-			加载失败：{errorMessage}
+			{t('加载失败：', 'Load failed: ')}{errorMessage}
 		</article>
 	{:else if detail}
 		<div class="space-y-6">
@@ -84,55 +92,55 @@
 								: 'bg-gray-200 text-gray-700 dark:bg-gray-800 dark:text-gray-300'
 						}`}
 					>
-						{detail.is_installed ? '已安装' : '未安装'}
+						{detail.is_installed ? t('已安装', 'Installed') : t('未安装', 'Not Installed')}
 					</span>
 				</div>
 
 				<div class="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
 					<div class="rounded-xl bg-blue-50 p-4 dark:bg-blue-950/20">
-						<p class="text-xs text-blue-700 dark:text-blue-300">累计游玩</p>
+						<p class="text-xs text-blue-700 dark:text-blue-300">{t('累计游玩', 'Total Playtime')}</p>
 						<p class="mt-2 text-xl font-semibold text-blue-900 dark:text-blue-100">{detail.total_playtime_formatted}</p>
 					</div>
 					<div class="rounded-xl bg-purple-50 p-4 dark:bg-purple-950/20">
-						<p class="text-xs text-purple-700 dark:text-purple-300">总会话数</p>
+						<p class="text-xs text-purple-700 dark:text-purple-300">{t('总会话数', 'Total Sessions')}</p>
 						<p class="mt-2 text-xl font-semibold text-purple-900 dark:text-purple-100">{detail.session_count}</p>
 					</div>
 					<div class="rounded-xl bg-amber-50 p-4 dark:bg-amber-950/20">
-						<p class="text-xs text-amber-700 dark:text-amber-300">平均会话</p>
+						<p class="text-xs text-amber-700 dark:text-amber-300">{t('平均会话', 'Average Session')}</p>
 						<p class="mt-2 text-xl font-semibold text-amber-900 dark:text-amber-100">{detail.average_session_formatted}</p>
 					</div>
 					<div class="rounded-xl bg-slate-50 p-4 dark:bg-slate-900">
-						<p class="text-xs text-slate-700 dark:text-slate-300">最后游玩</p>
+						<p class="text-xs text-slate-700 dark:text-slate-300">{t('最后游玩', 'Last Played')}</p>
 						<p class="mt-2 text-sm font-semibold text-slate-900 dark:text-slate-100">{formatDateTime(detail.last_played_at)}</p>
 					</div>
 				</div>
 
 				<div class="mt-6 grid gap-4 md:grid-cols-2">
 					<div class="rounded-xl border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-[#101522]">
-						<p class="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">安装路径</p>
+						<p class="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">{t('安装路径', 'Install Path')}</p>
 						<p class="mt-2 break-all text-sm text-gray-800 dark:text-gray-200">{detail.install_path ?? '-'}</p>
 					</div>
 					<div class="rounded-xl border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-[#101522]">
-						<p class="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">更新时间</p>
+						<p class="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">{t('更新时间', 'Updated At')}</p>
 						<p class="mt-2 text-sm text-gray-800 dark:text-gray-200">{formatDateTime(detail.updated_at)}</p>
 					</div>
 				</div>
 			</article>
 
 			<article class="rounded-2xl border border-gray-200 bg-white/90 p-6 shadow-sm dark:border-gray-800 dark:bg-[#151926]">
-				<h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">最近会话</h2>
+				<h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">{t('最近会话', 'Recent Sessions')}</h2>
 
 				{#if detail.recent_sessions.length === 0}
-					<p class="mt-4 text-sm text-gray-500 dark:text-gray-400">暂无会话数据</p>
+					<p class="mt-4 text-sm text-gray-500 dark:text-gray-400">{t('暂无会话数据', 'No session data')}</p>
 				{:else}
 					<div class="mt-4 overflow-hidden rounded-xl border border-gray-200 dark:border-gray-700">
 						<table class="min-w-full divide-y divide-gray-200 text-sm dark:divide-gray-700">
 							<thead class="bg-gray-50 dark:bg-[#101522]">
 								<tr>
-									<th class="px-4 py-3 text-left font-medium text-gray-600 dark:text-gray-300">会话ID</th>
-									<th class="px-4 py-3 text-left font-medium text-gray-600 dark:text-gray-300">开始时间</th>
-									<th class="px-4 py-3 text-left font-medium text-gray-600 dark:text-gray-300">结束时间</th>
-									<th class="px-4 py-3 text-left font-medium text-gray-600 dark:text-gray-300">时长</th>
+									<th class="px-4 py-3 text-left font-medium text-gray-600 dark:text-gray-300">{t('会话ID', 'Session ID')}</th>
+									<th class="px-4 py-3 text-left font-medium text-gray-600 dark:text-gray-300">{t('开始时间', 'Start Time')}</th>
+									<th class="px-4 py-3 text-left font-medium text-gray-600 dark:text-gray-300">{t('结束时间', 'End Time')}</th>
+									<th class="px-4 py-3 text-left font-medium text-gray-600 dark:text-gray-300">{t('时长', 'Duration')}</th>
 								</tr>
 							</thead>
 							<tbody class="divide-y divide-gray-100 bg-white dark:divide-gray-800 dark:bg-[#151926]">

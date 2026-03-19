@@ -1,8 +1,9 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { loadSettingsFromStorage, type AppLanguage } from '$lib/settings';
 
   const CURRENT_PLAYING_POLL_INTERVAL_MS = 2000;
-  const SESSION_COMPLETION_POLL_INTERVAL_MS = 5000;
+  const DEFAULT_SESSION_COMPLETION_POLL_INTERVAL_MS = 5000;
 
   import {
     getDashboardSnapshot,
@@ -31,6 +32,11 @@
   let sessionCompletionRefreshing = false;
   let metricsRefreshing = false;
   let latestCompletedSessionId = $state<number | null>(null);
+  let language = $state<AppLanguage>('zh-CN');
+
+  function t(zh: string, en: string) {
+    return language === 'zh-CN' ? zh : en;
+  }
 
   const DASHBOARD_CACHE_KEY = 'dashboard_snapshot_cache_v1';
 
@@ -201,6 +207,10 @@
   }
 
   onMount(() => {
+    const settings = loadSettingsFromStorage();
+    const sessionCompletionPollIntervalMs = Math.max(2, settings.dashboardRefreshSeconds) * 1000;
+    language = settings.language;
+
     const hydrated = hydrateFromCache();
     loadDashboardData(!hydrated);
 
@@ -210,7 +220,7 @@
 
     const sessionCompletionIntervalId = window.setInterval(() => {
       refreshWhenSessionCompleted();
-    }, SESSION_COMPLETION_POLL_INTERVAL_MS);
+    }, sessionCompletionPollIntervalMs || DEFAULT_SESSION_COMPLETION_POLL_INTERVAL_MS);
 
     const handleWindowFocus = () => {
       refreshCurrentPlaying();
@@ -244,7 +254,7 @@
           <div class="absolute inset-0 bg-linear-to-r from-cyan-500/10 to-blue-600/10 opacity-50 transition-opacity group-hover:opacity-30 dark:opacity-20"></div>
           <div class="relative z-10 flex items-center justify-between gap-4">
             <div>
-              <h3 class="mb-1 text-xs font-medium uppercase tracking-[0.2em] text-cyan-600 dark:text-cyan-400">Today's Playtime</h3>
+              <h3 class="mb-1 text-xs font-medium uppercase tracking-[0.2em] text-cyan-600 dark:text-cyan-400">{t('今日时长', "Today's Playtime")}</h3>
               {#if initialLoading}
                 <div class="mt-2 h-10 w-36 rounded-lg skeleton-shimmer sm:h-11"></div>
               {:else}
@@ -274,7 +284,7 @@
           <div class="absolute inset-0 bg-linear-to-r from-purple-500/10 to-pink-600/10 opacity-50 transition-opacity group-hover:opacity-30 dark:opacity-20"></div>
           <div class="relative z-10 flex items-center justify-between gap-4">
             <div>
-              <h3 class="mb-1 text-xs font-medium uppercase tracking-[0.2em] text-purple-600 dark:text-purple-400">This Week</h3>
+              <h3 class="mb-1 text-xs font-medium uppercase tracking-[0.2em] text-purple-600 dark:text-purple-400">{t('本周时长', 'This Week')}</h3>
               {#if initialLoading}
                 <div class="mt-2 h-10 w-36 rounded-lg skeleton-shimmer sm:h-11"></div>
               {:else}
@@ -303,13 +313,13 @@
         </div>
       </div>
 
-      <CurrentPlayingCard currentPlaying={currentPlaying} loading={initialLoading} />
-      <RecentSessionsList sessions={recentSessions} loading={initialLoading} />
+      <CurrentPlayingCard currentPlaying={currentPlaying} loading={initialLoading} language={language} />
+      <RecentSessionsList sessions={recentSessions} loading={initialLoading} language={language} />
     </div>
 
     <div class="min-w-0 space-y-6">
-      <DailyChart items={dailyChartItems} loading={initialLoading} />
-      <DonutChart items={donutItems} loading={initialLoading} />
+      <DailyChart items={dailyChartItems} loading={initialLoading} language={language} />
+      <DonutChart items={donutItems} loading={initialLoading} language={language} />
     </div>
   </div>
 </section>
