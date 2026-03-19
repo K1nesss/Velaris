@@ -2,7 +2,7 @@
   "$schema": "./tauri.schema.json",
   "productName": "playtime-tracker",
   "version": "0.1.0",
-  "identifier": "com.tauri.dev",
+  "identifier": "com.k1nesss.Velaris",
   "build": {
     "frontendDist": "../build",
     "devUrl": "http://localhost:5173",
