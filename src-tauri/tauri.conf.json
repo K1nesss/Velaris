@@ -1,6 +1,7 @@
 {
   "$schema": "./tauri.schema.json",
-  "productName": "playtime-tracker",
+  "productName": "Velaris",
+  "mainBinaryName": "Velaris",
   "version": "0.1.0",
   "identifier": "com.k1nesss.Velaris",
   "build": {
@@ -12,7 +13,7 @@
   "app": {
     "windows": [
       {
-        "title": "",
+        "title": "Velaris",
         "width": 1024,
         "height": 768,
         "resizable": true,
@@ -29,6 +30,11 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "windows": {
+      "nsis": {
+        "installerIcon": "icons/icon.ico"
+      }
+    },
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
