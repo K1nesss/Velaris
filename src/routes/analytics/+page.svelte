@@ -523,7 +523,7 @@
     <div class="pb-8">
       <div class="mb-8 flex flex-col items-start justify-between gap-4 md:flex-row md:items-center">
         <div>
-          <h1 class="text-2xl font-bold text-gray-800 dark:text-white">Analytics Overview</h1>
+          <h1 class="text-2xl font-bold text-gray-800 dark:text-white">{t('数据分析总览', 'Analytics Overview')}</h1>
           <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">{t('深度分析你的游玩习惯与统计数据', 'Analyze your play habits and statistics in depth')}</p>
         </div>
 
