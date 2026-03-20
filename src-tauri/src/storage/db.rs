@@ -2,11 +2,11 @@ use base64::{engine::general_purpose, Engine as _};
 use rusqlite::{Connection, Result};
 use std::env;
 use std::fs::create_dir_all;
-use std::fs::read_to_string;
 use std::fs::{read, remove_file, write};
 use std::path::PathBuf;
 
 const APP_DATA_DIR_NAME: &str = "Velaris";
+const EMBEDDED_SCHEMA_SQL: &str = include_str!("schema.sql");
 
 #[tauri::command]
 pub fn init_database() -> Result<(), String> {
@@ -21,30 +21,7 @@ pub fn init_database() -> Result<(), String> {
         .map_err(|e| format!("Failed to apply database PRAGMA settings: {}", e))?;
     println!("PRAGMA settings applied");
 
-    // 检查数据库是否已经初始化
-    let is_initialized = is_database_initialized(&conn)
-        .map_err(|e| format!("Failed to check initialization status: {}", e))?;
-    println!("Database initialized status: {}", is_initialized);
-
-    if !is_initialized {
-        // 读取并执行 schema.sql
-        let schema_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("src")
-            .join("storage")
-            .join("schema.sql");
-        println!("Schema path: {}", schema_path.display());
-
-        let schema_sql =
-            read_to_string(schema_path).map_err(|e| format!("Failed to read schema.sql: {}", e))?;
-        println!("Schema SQL read successfully");
-
-        conn.execute_batch(&schema_sql)
-            .map_err(|e| format!("Failed to execute schema.sql: {}", e))?;
-        println!("Database initialized successfully");
-    }
-
-    ensure_database_indexes(&conn)
-        .map_err(|e| format!("Failed to ensure database indexes: {}", e))?;
+    ensure_schema_and_indexes(&conn)?;
 
     Ok(())
 }
@@ -56,6 +33,9 @@ pub fn get_db_connection() -> Result<Connection, String> {
 
     // 设置 PRAGMA
     apply_connection_pragmas(&conn).map_err(|e| e.to_string())?;
+
+    // 兜底：若启动时初始化失败，这里仍会自动补建表结构
+    ensure_schema_and_indexes(&conn)?;
 
     Ok(conn)
 }
@@ -275,4 +255,21 @@ fn ensure_database_indexes(conn: &Connection) -> rusqlite::Result<()> {
          CREATE INDEX IF NOT EXISTS idx_games_name_nocase ON games(name COLLATE NOCASE);
          CREATE INDEX IF NOT EXISTS idx_game_stats_last_played_at ON game_stats(last_played_at);",
     )
+}
+
+fn ensure_schema_and_indexes(conn: &Connection) -> Result<(), String> {
+    let is_initialized = is_database_initialized(conn)
+        .map_err(|e| format!("Failed to check initialization status: {}", e))?;
+    println!("Database initialized status: {}", is_initialized);
+
+    if !is_initialized {
+        conn.execute_batch(EMBEDDED_SCHEMA_SQL)
+            .map_err(|e| format!("Failed to execute embedded schema.sql: {}", e))?;
+        println!("Database initialized successfully");
+    }
+
+    ensure_database_indexes(conn)
+        .map_err(|e| format!("Failed to ensure database indexes: {}", e))?;
+
+    Ok(())
 }
