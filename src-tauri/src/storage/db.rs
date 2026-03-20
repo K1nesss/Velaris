@@ -196,6 +196,12 @@ pub fn import_database(base64_data: String) -> Result<(), String> {
 }
 
 pub fn get_db_path() -> Result<PathBuf, String> {
+    if cfg!(debug_assertions) {
+        // Dev/test builds should use a project-local database for easier debugging.
+        let project_db_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("playtime-tracker.db");
+        return Ok(project_db_path);
+    }
+
     let base_dir = resolve_app_data_dir()?;
     let app_dir = base_dir.join(APP_DATA_DIR_NAME);
 
