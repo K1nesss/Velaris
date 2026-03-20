@@ -6,6 +6,8 @@ use std::thread;
 use std::time::{Duration, SystemTime};
 use sysinfo::System;
 
+use crate::storage::db::get_db_path;
+
 // 游戏会话状态#[derive(Debug, Clone)]
 pub struct GameSession {
     pub game_id: i32,
@@ -359,7 +361,7 @@ impl ProcessWatcher {
 // Tauri 命令
 #[tauri::command]
 pub fn start_process_monitor() -> Result<(), String> {
-    let db_path = PathBuf::from("./playtime-tracker.db");
+    let db_path = get_db_path()?;
 
     match ProcessWatcher::new(&db_path) {
         Ok(mut watcher) => {

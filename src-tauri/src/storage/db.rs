@@ -1,8 +1,12 @@
 use base64::{engine::general_purpose, Engine as _};
 use rusqlite::{Connection, Result};
+use std::env;
+use std::fs::create_dir_all;
 use std::fs::read_to_string;
 use std::fs::{read, remove_file, write};
 use std::path::PathBuf;
+
+const APP_DATA_DIR_NAME: &str = "Velaris";
 
 #[tauri::command]
 pub fn init_database() -> Result<(), String> {
@@ -61,7 +65,14 @@ pub fn print_database_tables() {
     println!("=== Printing database tables ===");
 
     // 直接创建数据库连接
-    let db_path = PathBuf::from("./playtime-tracker.db");
+    let db_path = match get_db_path() {
+        Ok(path) => path,
+        Err(error) => {
+            println!("Error getting database path: {}", error);
+            return;
+        }
+    };
+
     match Connection::open(&db_path) {
         Ok(conn) => {
             // 设置 PRAGMA
@@ -204,10 +215,38 @@ pub fn import_database(base64_data: String) -> Result<(), String> {
     Ok(())
 }
 
-fn get_db_path() -> Result<PathBuf, String> {
-    // 使用当前目录作为数据库存储位置
-    let db_path = PathBuf::from("./playtime-tracker.db");
-    Ok(db_path)
+pub fn get_db_path() -> Result<PathBuf, String> {
+    let base_dir = resolve_app_data_dir()?;
+    let app_dir = base_dir.join(APP_DATA_DIR_NAME);
+
+    create_dir_all(&app_dir).map_err(|e| format!("Failed to create app data directory: {}", e))?;
+
+    Ok(app_dir.join("playtime-tracker.db"))
+}
+
+fn resolve_app_data_dir() -> Result<PathBuf, String> {
+    if cfg!(target_os = "windows") {
+        if let Some(local_app_data) = env::var_os("LOCALAPPDATA") {
+            return Ok(PathBuf::from(local_app_data));
+        }
+        if let Some(app_data) = env::var_os("APPDATA") {
+            return Ok(PathBuf::from(app_data));
+        }
+    }
+
+    if cfg!(target_os = "macos") {
+        if let Some(home) = env::var_os("HOME") {
+            return Ok(PathBuf::from(home)
+                .join("Library")
+                .join("Application Support"));
+        }
+    }
+
+    if let Some(home) = env::var_os("HOME") {
+        return Ok(PathBuf::from(home).join(".local").join("share"));
+    }
+
+    env::current_dir().map_err(|e| format!("Failed to resolve current directory: {}", e))
 }
 
 fn apply_connection_pragmas(conn: &Connection) -> rusqlite::Result<()> {
