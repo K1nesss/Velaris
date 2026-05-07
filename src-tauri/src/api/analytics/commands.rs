@@ -258,9 +258,10 @@ fn query_weekday_breakdown(
         .map_err(|e| e.to_string())?;
 
     let rows = stmt
-        .query_map(params![LOCAL_TIME_OFFSET_SECONDS, range_start, range_end], |row| {
-            Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?))
-        })
+        .query_map(
+            params![LOCAL_TIME_OFFSET_SECONDS, range_start, range_end],
+            |row| Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?)),
+        )
         .map_err(|e| e.to_string())?;
 
     for row in rows {
@@ -338,8 +339,10 @@ fn query_overlap_duration(
         )
         .map_err(|e| e.to_string())?;
 
-    stmt.query_row(params![range_start, range_end, now_utc], |row| row.get::<_, i64>(0))
-        .map_err(|e| e.to_string())
+    stmt.query_row(params![range_start, range_end, now_utc], |row| {
+        row.get::<_, i64>(0)
+    })
+    .map_err(|e| e.to_string())
 }
 
 fn format_duration(total_seconds: i64) -> String {

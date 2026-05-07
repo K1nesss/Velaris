@@ -1,4 +1,5 @@
 use rusqlite::Result;
+use std::collections::HashSet;
 use std::time::SystemTime;
 use steamlocate::SteamDir;
 
@@ -22,9 +23,20 @@ pub fn steam_scan_print() -> Result<(), String> {
         .transaction()
         .map_err(|e| format!("Failed to start transaction: {}", e))?;
 
+    let ignored_appids = {
+        let mut stmt = tx
+            .prepare("SELECT appid FROM ignored_games")
+            .map_err(|e| format!("Failed to prepare ignored games query: {}", e))?;
+        let rows = stmt
+            .query_map([], |row| row.get::<_, i32>(0))
+            .map_err(|e| format!("Failed to query ignored games: {}", e))?;
+        rows.collect::<Result<HashSet<_>, _>>()
+            .map_err(|e| format!("Failed to read ignored games: {}", e))?
+    };
+
     // 先将所有游戏标记为未安装，扫描时会重新标记为已安装
     tx.execute(
-        "UPDATE games SET is_installed = 0, install_path = NULL;",
+        "UPDATE games SET is_installed = 0, install_path = NULL WHERE source = 'steam';",
         [],
     )
     .map_err(|e| format!("Failed to mark games as not installed: {}", e))?;
@@ -32,9 +44,10 @@ pub fn steam_scan_print() -> Result<(), String> {
 
     let mut upsert_stmt = tx
         .prepare(
-            "INSERT INTO games (appid, name, install_path, is_installed, created_at, updated_at)
-             VALUES (?1, ?2, ?3, 1, ?4, ?5)
+            "INSERT INTO games (appid, source, name, install_path, is_installed, created_at, updated_at)
+             VALUES (?1, 'steam', ?2, ?3, 1, ?4, ?5)
              ON CONFLICT(appid) DO UPDATE SET
+             source = 'steam',
              name = excluded.name,
              install_path = excluded.install_path,
              is_installed = excluded.is_installed,
@@ -62,6 +75,11 @@ pub fn steam_scan_print() -> Result<(), String> {
         let apps = library.apps();
         for app in apps {
             let app = app.map_err(|e| format!("Failed to get app: {}", e))?;
+            let appid = app.app_id as i32;
+            if ignored_appids.contains(&appid) {
+                continue;
+            }
+
             let name = app.name.as_deref().unwrap_or("<unknown>");
             let install_path = library.resolve_app_dir(&app);
             let install_path_str = install_path.to_str().unwrap_or("");
@@ -69,13 +87,7 @@ pub fn steam_scan_print() -> Result<(), String> {
             game_count += 1;
 
             // 插入或更新游戏信息到数据库
-            let result = upsert_stmt.execute((
-                app.app_id as i32,
-                name,
-                install_path_str,
-                timestamp,
-                timestamp,
-            ));
+            let result = upsert_stmt.execute((appid, name, install_path_str, timestamp, timestamp));
 
             if let Err(e) = result {
                 println!("    ✗ Error saving to database: {}", e);

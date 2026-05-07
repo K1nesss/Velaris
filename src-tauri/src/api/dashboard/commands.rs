@@ -106,7 +106,10 @@ pub fn dashboard_current_playing() -> Result<Option<CurrentPlayingGame>, String>
     query_current_playing(&conn, now)
 }
 
-fn query_current_playing(conn: &Connection, now: i64) -> Result<Option<CurrentPlayingGame>, String> {
+fn query_current_playing(
+    conn: &Connection,
+    now: i64,
+) -> Result<Option<CurrentPlayingGame>, String> {
     let mut stmt = conn
         .prepare(
             "SELECT s.id, s.game_id, g.name, s.start_time
@@ -185,7 +188,9 @@ fn query_donut_data(conn: &Connection, limit: i64) -> Result<Vec<DonutChartItem>
         })
         .map_err(|e| e.to_string())?;
 
-    let items = rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())?;
+    let items = rows
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())?;
     Ok(items)
 }
 
@@ -228,7 +233,9 @@ fn query_recent_sessions(
         })
         .map_err(|e| e.to_string())?;
 
-    let items = rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())?;
+    let items = rows
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())?;
     Ok(items)
 }
 
@@ -252,7 +259,11 @@ fn query_week_total(conn: &Connection, now: i64) -> Result<DurationSummary, Stri
     })
 }
 
-fn query_daily_chart(conn: &Connection, now: i64, days: i64) -> Result<Vec<DailyChartItem>, String> {
+fn query_daily_chart(
+    conn: &Connection,
+    now: i64,
+    days: i64,
+) -> Result<Vec<DailyChartItem>, String> {
     let days = days.clamp(1, 30);
     let (today_start, _) = current_local_day_bounds(now);
 
@@ -335,7 +346,9 @@ fn query_overlap_duration(
         .map_err(|e| e.to_string())?;
 
     let seconds = stmt
-        .query_row(params![range_start, range_end, now_utc], |row| row.get::<_, i64>(0))
+        .query_row(params![range_start, range_end, now_utc], |row| {
+            row.get::<_, i64>(0)
+        })
         .map_err(|e| e.to_string())?;
 
     Ok(seconds)

@@ -1,52 +1,36 @@
 # Velaris
 
-面向 Steam 玩家的一体化桌面游玩时长追踪工具，基于 Tauri + SvelteKit + Rust。
+Velaris 是一个基于 Tauri + SvelteKit + Rust 的桌面游戏时长追踪工具。它会扫描本机游戏库、监听游戏进程、记录每次游玩会话，并在 Dashboard、Timeline、Analytics 和游戏库中展示统计结果。
 
-本 README 为中文版开发者协作指南，目标是让新协作者在最短时间内完成环境搭建、参与开发并按统一流程合并代码。
+当前项目以 Windows 桌面端为主要目标。
 
----
+## 功能概览
 
-## 1. 项目简介
+- 自动扫描 Steam 已安装游戏，并同步游戏图标、库封面和详情页背景图。
+- 支持手动添加游戏，可选择 exe、自动识别名称和图标，也可自定义封面与背景图。
+- 自动监听游戏进程，记录开始时间、结束时间和本次游玩时长。
+- Timeline 展示每条游戏记录，游戏头像优先使用已缓存的 Steam icon。
+- 游戏库支持封面展示、详情页、隐藏、删除和恢复隐藏游戏。
+- 设置页支持主题、动效、刷新间隔、默认统计区间、更新检查等配置。
+- 支持 GitHub Release 更新提醒和 Tauri updater 一键更新。
+- 支持本地数据导入导出，方便备份和迁移。
 
-Velaris 提供以下核心能力：
+## 技术栈
 
-- 自动检测 Steam 库与已安装游戏
-- 自动记录游戏开始/结束会话
-- Dashboard 实时统计与当前游玩状态
-- Timeline 会话时间线浏览
-- Analytics 多维统计（日/周/时段/游戏占比）
-- Games 游戏列表与详情
-- 中英文切换、托盘运行、数据导入导出
-
----
-
-## 2. 技术栈
-
-- 前端：SvelteKit + TypeScript + TailwindCSS + ECharts
-- 桌面层：Tauri v2
+- 前端：SvelteKit、TypeScript、Tailwind CSS、ECharts
+- 桌面端：Tauri v2
 - 后端：Rust
-- 存储：SQLite（rusqlite）
+- 数据库：SQLite、rusqlite
+- 更新：Tauri updater + GitHub Releases
 
----
+## 开发环境
 
-## 3. 开发环境要求
+请先安装：
 
-请确保本机已安装：
-
-- Node.js LTS（建议 20+）
+- Node.js LTS，建议 20+
 - pnpm
-- Rust（stable）
-- Cargo / Tauri 相关构建依赖
-
-Windows 机器如果 PowerShell 执行策略阻止 pnpm，可使用：
-
-```bash
-pnpm.cmd install
-```
-
----
-
-## 4. 本地启动与常用命令
+- Rust stable
+- Cargo Tauri 相关构建依赖
 
 安装依赖：
 
@@ -54,29 +38,36 @@ pnpm.cmd install
 pnpm install
 ```
 
-前端开发（仅 Web）：
+如果 Windows PowerShell 执行策略影响 `pnpm`，可以使用：
+
+```bash
+pnpm.cmd install
+```
+
+## 常用命令
+
+启动前端开发服务：
 
 ```bash
 pnpm dev
 ```
 
-桌面联调（Tauri + 前端）：
+启动 Tauri 桌面开发模式：
 
 ```bash
 cargo tauri dev
 ```
 
-代码检查：
+前端类型检查：
 
 ```bash
 pnpm check
-pnpm lint
 ```
 
-格式化：
+Rust 检查：
 
 ```bash
-pnpm format
+cargo check
 ```
 
 构建发布包：
@@ -85,103 +76,77 @@ pnpm format
 cargo tauri build
 ```
 
-Windows 常见产物目录：
+Windows 常见构建产物目录：
 
-- src-tauri/target/release/bundle/nsis/
-- src-tauri/target/release/bundle/msi/
+- `src-tauri/target/release/bundle/nsis/`
+- `src-tauri/target/release/bundle/msi/`
 
----
+## 发布与更新
 
-## 5. Git 协作模型（推荐）
+项目使用 GitHub Releases 作为安装包和更新清单的发布位置。当前 updater endpoint：
 
-### 分支职责
-
-- main：稳定/发布分支
-- dev：团队集成分支（日常合并目标）
-- feature/\*：功能开发分支
-- fix/\*：问题修复分支
-- test/\*：实验或验证分支（验证通过后再合并到 dev）
-
-### 协作流程
-
-1. 从 dev 拉取最新代码。
-2. 基于 dev 创建个人分支开发。
-3. 本地自测通过后推送个人分支。
-4. 发起 PR 到 dev。
-5. 由维护者审查并合并。
-6. dev 稳定后再合并到 main。
-
-示例命令：
-
-```bash
-git switch dev
-git pull origin dev
-git switch -c feature/xxx
-
-# 开发并提交
-git add .
-git commit -m "feat(module): 描述本次改动"
-git push -u origin feature/xxx
+```text
+https://github.com/K1nesss/Velaris/releases/latest/download/latest.json
 ```
 
-将测试分支合并到 dev：
+发布新版本时需要：
 
-```bash
-git switch dev
-git pull origin dev
-git merge test/steam-path-fix
-git push origin dev
+1. 更新 `src-tauri/tauri.conf.json` 里的 `version`。
+2. 使用 updater 私钥打包并生成签名更新产物。
+3. 创建 GitHub Release，例如 `v0.1.0`。
+4. 上传安装包 `.exe`、更新包和 `latest.json`。
+5. 客户端检查更新时会读取 latest release 中的 `latest.json`。
+
+本机 updater 私钥路径：
+
+```text
+C:\Users\swp\.tauri\velaris-updater.key
 ```
 
----
+本机 updater 私钥密码路径：
 
-## 6. 提交与 PR 规范
+```text
+C:\Users\swp\.tauri\velaris-updater-password.txt
+```
 
-建议使用统一提交前缀：
+打包时可设置：
 
-- feat: 新功能
-- fix: 修复问题
-- refactor: 重构（无功能变化）
-- perf: 性能优化
-- docs: 文档变更
-- chore: 工程维护
+```powershell
+$env:TAURI_SIGNING_PRIVATE_KEY=(Get-Content -Raw "C:\Users\swp\.tauri\velaris-updater.key")
+$env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD=(Get-Content -Raw "C:\Users\swp\.tauri\velaris-updater-password.txt")
+cargo tauri build
+```
 
-PR 描述建议包含：
+私钥和密码只能保存在本机或 CI Secret 中，不能提交到仓库。
 
-- 改动目的
-- 主要改动点
-- 自测结果
-- 风险与回滚方式（如有）
-- UI 改动截图（如有）
+更完整的发布说明见 [UPDATE_RELEASE_GUIDE.md](./UPDATE_RELEASE_GUIDE.md)。
 
----
+## 分支建议
 
-## 7. 合并前检查清单
+- `main`：稳定发布分支，用于 GitHub Release。
+- `dev`：日常集成分支。
+- `feature/*`：功能开发分支。
+- `fix/*`：问题修复分支。
 
-合并到 dev 前请确认：
+当前如果是个人开发，也可以先直接在 `main` 上发布稳定版本，等功能多人协作或发布节奏变复杂后再恢复 `dev -> main` 的合并流程。
 
-- 已同步最新 dev 并解决冲突
-- 本地可正常启动（cargo tauri dev）
-- pnpm check 与 pnpm lint 通过
-- 不包含无关文件、构建产物和敏感信息
-- PR 描述完整，便于审查
+## 数据与资源
 
----
+Velaris 会在本地用户目录中保存数据库、缓存图标、Steam 封面、详情页背景图和手动添加游戏的资源。构建产物、缓存、数据库和密钥不应提交到 Git。
 
-## 8. 数据与目录说明
+请勿提交：
 
-- 调试模式（debug）：使用项目本地数据库，便于开发验证。
-- 发布模式（release）：使用用户目录数据库，保证安装版可写和稳定。
+- `build/`
+- `src-tauri/target/`
+- 本地数据库文件
+- Steam API Key
+- updater 私钥
+- 其他用户隐私或本机路径敏感数据
 
-请勿提交以下内容：
+## 未来规划
 
-- build 产物
-- src-tauri/target 产物
-- 本地缓存与临时文件
-- 任何密钥、令牌、账号配置
+后续规划记录在 [FUTURE_ROADMAP.md](./FUTURE_ROADMAP.md)，包括多平台游戏库扫描、成就与媒体增强、目标系统、云同步、备份恢复、游戏洞察和更完整的更新体验。
 
----
+## License
 
-## 9. 开源与许可证
-
-当前仓库用于协作开发与测试。对外公开前请补充正式 License，并确认第三方依赖与资源版权合规。
+当前仓库用于个人开发与测试。正式公开发布前建议补充 License，并检查第三方依赖、Steam 资源缓存和图标资源的版权合规。

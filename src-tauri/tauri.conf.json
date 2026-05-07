@@ -1,46 +1,64 @@
 {
-  "$schema": "./tauri.schema.json",
-  "productName": "Velaris",
-  "mainBinaryName": "Velaris",
-  "version": "0.1.0",
-  "identifier": "com.k1nesss.Velaris",
-  "build": {
-    "frontendDist": "../build",
-    "devUrl": "http://localhost:5173",
-    "beforeDevCommand": "pnpm dev",
-    "beforeBuildCommand": "pnpm build"
-  },
-  "app": {
-    "windows": [
-      {
-        "title": "Velaris",
-        "width": 1024,
-        "height": 768,
-        "resizable": true,
-        "minWidth": 960,
-        "minHeight": 640,
-        "decorations": false,
-        "fullscreen": false
-      }
-    ],
-    "security": {
-      "csp": null
-    }
-  },
-  "bundle": {
-    "active": true,
-    "targets": "all",
-    "windows": {
-      "nsis": {
-        "installerIcon": "icons/icon.ico"
-      }
-    },
-    "icon": [
-      "icons/32x32.png",
-      "icons/128x128.png",
-      "icons/128x128@2x.png",
-      "icons/icon.icns",
-      "icons/icon.ico"
-    ]
-  }
+	"$schema": "./tauri.schema.json",
+	"productName": "Velaris",
+	"mainBinaryName": "Velaris",
+	"version": "0.1.0",
+	"identifier": "com.k1nesss.Velaris",
+	"build": {
+		"frontendDist": "../build",
+		"devUrl": "http://localhost:5173",
+		"beforeDevCommand": "pnpm dev",
+		"beforeBuildCommand": "pnpm build"
+	},
+	"app": {
+		"windows": [
+			{
+				"title": "Velaris",
+				"width": 1024,
+				"height": 768,
+				"resizable": true,
+				"minWidth": 960,
+				"minHeight": 640,
+				"decorations": false,
+				"fullscreen": false
+			}
+		],
+		"security": {
+			"csp": null,
+			"assetProtocol": {
+				"enable": true,
+				"scope": [
+					"$APPCACHE/steam-icons/**",
+					"$APPCACHE/steam-library/**",
+					"$APPCACHE/manual-assets/**"
+				]
+			}
+		}
+	},
+	"bundle": {
+		"active": true,
+		"createUpdaterArtifacts": true,
+		"targets": "all",
+		"windows": {
+			"nsis": {
+				"installerIcon": "icons/icon.ico"
+			}
+		},
+		"icon": [
+			"icons/32x32.png",
+			"icons/128x128.png",
+			"icons/128x128@2x.png",
+			"icons/icon.icns",
+			"icons/icon.ico"
+		]
+	},
+	"plugins": {
+		"updater": {
+			"pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDE1NTRFMjBDMzFFRjVFQzUKUldURlh1OHhET0pVRlI0UWN6YjJQbVBKRUdMZDJsUEZzK0lBZUR0bnFzSm50a2dBcmxmMmMxancK",
+			"endpoints": ["https://github.com/K1nesss/Velaris/releases/latest/download/latest.json"],
+			"windows": {
+				"installMode": "passive"
+			}
+		}
+	}
 }

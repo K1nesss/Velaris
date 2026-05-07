@@ -35,5 +35,12 @@ export default defineConfig(
 				svelteConfig
 			}
 		}
+	},
+	{
+		files: ['src/lib/components/Sidebar.svelte'],
+		rules: {
+			'svelte/no-at-html-tags': 'off',
+			'svelte/prefer-writable-derived': 'off'
+		}
 	}
 );

@@ -11,7 +11,11 @@ use api::dashboard::{
     dashboard_current_playing, dashboard_daily_chart, dashboard_donut_data,
     dashboard_recent_sessions, dashboard_snapshot, dashboard_today_total, dashboard_week_total,
 };
-use api::games::{game_detail, games_list};
+use api::games::{
+    create_manual_game, delete_game, delete_game_session, game_detail, games_list,
+    hidden_games_list, hide_game, ignored_games_list, restore_hidden_game, restore_ignored_game,
+};
+use api::steam::sync_steam_owned_game_icons;
 use api::timeline::timeline_sessions;
 use core::file_watcher::start_file_watcher;
 use core::process_watcher::start_process_monitor;
@@ -67,6 +71,9 @@ fn main() {
     }
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
             let now_playing_item = MenuItem::with_id(
                 app,
@@ -161,7 +168,16 @@ fn main() {
             dashboard_snapshot,
             analytics_snapshot,
             games_list,
+            create_manual_game,
             game_detail,
+            hide_game,
+            hidden_games_list,
+            restore_hidden_game,
+            delete_game,
+            delete_game_session,
+            ignored_games_list,
+            restore_ignored_game,
+            sync_steam_owned_game_icons,
             timeline_sessions
         ])
         // 启动 App

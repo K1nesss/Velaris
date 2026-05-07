@@ -4,6 +4,8 @@ export type AppLanguage = 'zh-CN' | 'en-US';
 export type AppSettings = {
   themeMode: ThemeMode;
   language: AppLanguage;
+  apiKey: string;
+  steam64Id: string;
   launchOnStartup: boolean;
   minimizeToTray: boolean;
   autoStartMonitor: boolean;
@@ -19,6 +21,8 @@ export const SETTINGS_STORAGE_KEY = 'pt-settings-v1';
 export const DEFAULT_SETTINGS: AppSettings = {
   themeMode: 'system',
   language: 'zh-CN',
+  apiKey: '',
+  steam64Id: '',
   launchOnStartup: false,
   minimizeToTray: true,
   autoStartMonitor: true,
@@ -53,6 +57,10 @@ export function mergeSettings(input: Partial<AppSettings>): AppSettings {
     [1, 7, 30, 365],
     DEFAULT_SETTINGS.analyticsDefaultRange,
   );
+
+  merged.apiKey = typeof merged.apiKey === 'string' ? merged.apiKey.trim() : '';
+  merged.steam64Id =
+    typeof merged.steam64Id === 'string' ? merged.steam64Id.trim() : '';
 
   if (!['light', 'dark', 'system'].includes(merged.themeMode)) {
     merged.themeMode = DEFAULT_SETTINGS.themeMode;

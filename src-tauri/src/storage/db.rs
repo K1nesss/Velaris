@@ -62,17 +62,22 @@ pub fn print_database_tables() {
 
             // 打印 games 表
             println!("\n--- Games Table ---");
-            if let Ok(mut stmt) = conn.prepare("SELECT * FROM games;") {
+            if let Ok(mut stmt) = conn.prepare(
+                "SELECT id, appid, name, install_path, cover_path, icon_path, hero_path, is_hidden, created_at, updated_at FROM games;",
+            ) {
                 if let Ok(mut rows) = stmt.query([]) {
                     while let Ok(Some(row)) = rows.next() {
                         match (
                             row.get::<_, i32>(0),
                             row.get::<_, Option<i32>>(1),
                             row.get::<_, String>(2),
-                            row.get::<_, String>(3),
+                            row.get::<_, Option<String>>(3),
                             row.get::<_, Option<String>>(4),
-                            row.get::<_, i64>(5),
-                            row.get::<_, i64>(6),
+                            row.get::<_, Option<String>>(5),
+                            row.get::<_, Option<String>>(6),
+                            row.get::<_, i64>(7),
+                            row.get::<_, i64>(8),
+                            row.get::<_, i64>(9),
                         ) {
                             (
                                 Ok(id),
@@ -80,11 +85,14 @@ pub fn print_database_tables() {
                                 Ok(name),
                                 Ok(install_path),
                                 Ok(cover_path),
+                                Ok(icon_path),
+                                Ok(hero_path),
+                                Ok(is_hidden),
                                 Ok(created_at),
                                 Ok(updated_at),
                             ) => {
-                                println!("ID: {}, AppID: {:?}, Name: {}, Path: {}, Cover: {:?}, Created: {}, Updated: {}", 
-                                         id, appid, name, install_path, cover_path, created_at, updated_at);
+                                println!("ID: {}, AppID: {:?}, Name: {}, Path: {:?}, Cover: {:?}, Icon: {:?}, Hero: {:?}, Hidden: {}, Created: {}, Updated: {}", 
+                                         id, appid, name, install_path, cover_path, icon_path, hero_path, is_hidden, created_at, updated_at);
                             }
                             _ => println!("Error reading game row"),
                         }
@@ -258,21 +266,119 @@ fn ensure_database_indexes(conn: &Connection) -> rusqlite::Result<()> {
          CREATE INDEX IF NOT EXISTS idx_game_sessions_end_time ON game_sessions(end_time);
          CREATE INDEX IF NOT EXISTS idx_game_sessions_game_id_end_time ON game_sessions(game_id, end_time);
          CREATE INDEX IF NOT EXISTS idx_games_installed_name ON games(is_installed, name COLLATE NOCASE);
+         CREATE INDEX IF NOT EXISTS idx_games_hidden_installed_name ON games(is_hidden, is_installed, name COLLATE NOCASE);
          CREATE INDEX IF NOT EXISTS idx_games_name_nocase ON games(name COLLATE NOCASE);
-         CREATE INDEX IF NOT EXISTS idx_game_stats_last_played_at ON game_stats(last_played_at);",
+         CREATE INDEX IF NOT EXISTS idx_games_source ON games(source);
+         CREATE INDEX IF NOT EXISTS idx_games_executable_path ON games(executable_path);
+         CREATE INDEX IF NOT EXISTS idx_game_stats_last_played_at ON game_stats(last_played_at);
+         CREATE INDEX IF NOT EXISTS idx_steam_media_failures_retry ON steam_media_failures(retry_after);
+         CREATE INDEX IF NOT EXISTS idx_ignored_games_ignored_at ON ignored_games(ignored_at DESC);",
     )
+}
+
+fn ensure_database_migrations(conn: &Connection) -> Result<(), String> {
+    let has_source = conn.prepare("SELECT source FROM games LIMIT 0").is_ok();
+
+    if !has_source {
+        conn.execute(
+            "ALTER TABLE games ADD COLUMN source TEXT NOT NULL DEFAULT 'steam'",
+            [],
+        )
+        .map_err(|e| format!("Failed to add games.source column: {}", e))?;
+    }
+
+    let has_executable_path = conn
+        .prepare("SELECT executable_path FROM games LIMIT 0")
+        .is_ok();
+
+    if !has_executable_path {
+        conn.execute("ALTER TABLE games ADD COLUMN executable_path TEXT", [])
+            .map_err(|e| format!("Failed to add games.executable_path column: {}", e))?;
+    }
+
+    let has_icon_path = conn.prepare("SELECT icon_path FROM games LIMIT 0").is_ok();
+
+    if !has_icon_path {
+        conn.execute("ALTER TABLE games ADD COLUMN icon_path TEXT", [])
+            .map_err(|e| format!("Failed to add games.icon_path column: {}", e))?;
+        conn.execute(
+            "UPDATE games
+             SET icon_path = cover_path,
+                 cover_path = NULL
+             WHERE cover_path LIKE '%steam-icons%'",
+            [],
+        )
+        .map_err(|e| format!("Failed to migrate Steam icon paths: {}", e))?;
+    }
+
+    let has_hero_path = conn.prepare("SELECT hero_path FROM games LIMIT 0").is_ok();
+
+    if !has_hero_path {
+        conn.execute("ALTER TABLE games ADD COLUMN hero_path TEXT", [])
+            .map_err(|e| format!("Failed to add games.hero_path column: {}", e))?;
+    }
+
+    let has_is_hidden = conn.prepare("SELECT is_hidden FROM games LIMIT 0").is_ok();
+
+    if !has_is_hidden {
+        conn.execute(
+            "ALTER TABLE games ADD COLUMN is_hidden INTEGER NOT NULL DEFAULT 0",
+            [],
+        )
+        .map_err(|e| format!("Failed to add games.is_hidden column: {}", e))?;
+    }
+
+    let has_created_at = conn.prepare("SELECT created_at FROM games LIMIT 0").is_ok();
+
+    if !has_created_at {
+        conn.execute(
+            "ALTER TABLE games ADD COLUMN created_at INTEGER NOT NULL DEFAULT 0",
+            [],
+        )
+        .map_err(|e| format!("Failed to add games.created_at column: {}", e))?;
+        conn.execute(
+            "UPDATE games SET created_at = COALESCE(NULLIF(updated_at, 0), strftime('%s', 'now')) WHERE created_at = 0",
+            [],
+        )
+        .map_err(|e| format!("Failed to backfill games.created_at column: {}", e))?;
+    }
+
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS steam_media_failures (
+            appid INTEGER NOT NULL,
+            asset_type TEXT NOT NULL,
+            failed_at INTEGER NOT NULL,
+            retry_after INTEGER NOT NULL,
+            last_error TEXT,
+            PRIMARY KEY (appid, asset_type)
+        );",
+    )
+    .map_err(|e| format!("Failed to ensure steam_media_failures table: {}", e))?;
+
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS ignored_games (
+            appid INTEGER PRIMARY KEY,
+            name TEXT NOT NULL,
+            ignored_at INTEGER NOT NULL,
+            reason TEXT
+        );",
+    )
+    .map_err(|e| format!("Failed to ensure ignored_games table: {}", e))?;
+
+    Ok(())
 }
 
 fn ensure_schema_and_indexes(conn: &Connection) -> Result<(), String> {
     let is_initialized = is_database_initialized(conn)
         .map_err(|e| format!("Failed to check initialization status: {}", e))?;
-    println!("Database initialized status: {}", is_initialized);
 
     if !is_initialized {
         conn.execute_batch(EMBEDDED_SCHEMA_SQL)
             .map_err(|e| format!("Failed to execute embedded schema.sql: {}", e))?;
         println!("Database initialized successfully");
     }
+
+    ensure_database_migrations(conn)?;
 
     ensure_database_indexes(conn)
         .map_err(|e| format!("Failed to ensure database indexes: {}", e))?;

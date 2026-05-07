@@ -10,6 +10,7 @@ pub struct TimelineSessionItem {
     pub game_id: i32,
     pub appid: Option<i32>,
     pub game_name: String,
+    pub icon_path: Option<String>,
     pub start_time: i64,
     pub end_time: Option<i64>,
     pub duration_seconds: i64,
@@ -34,6 +35,7 @@ pub fn timeline_sessions(
                     s.game_id,
                     g.appid,
                     g.name,
+                    g.icon_path,
                     s.start_time,
                     s.end_time,
                     COALESCE(s.duration_seconds, COALESCE(s.end_time, ?1) - s.start_time) AS actual_duration
@@ -47,14 +49,15 @@ pub fn timeline_sessions(
 
     let rows = stmt
         .query_map(params![now, game_id, limit, offset], |row| {
-            let end_time: Option<i64> = row.get(5)?;
-            let duration_seconds: i64 = row.get(6)?;
+            let end_time: Option<i64> = row.get(6)?;
+            let duration_seconds: i64 = row.get(7)?;
             Ok(TimelineSessionItem {
                 session_id: row.get(0)?,
                 game_id: row.get(1)?,
                 appid: row.get(2)?,
                 game_name: row.get(3)?,
-                start_time: row.get(4)?,
+                icon_path: row.get(4)?,
+                start_time: row.get(5)?,
                 end_time,
                 duration_seconds,
                 formatted: format_duration(duration_seconds),
