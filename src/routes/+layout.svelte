@@ -266,6 +266,12 @@
 
 		window.addEventListener('pt-language-change', handleLanguageChange);
 
+		const preventNativeContextMenu = (event: MouseEvent) => {
+			event.preventDefault();
+		};
+
+		window.addEventListener('contextmenu', preventNativeContextMenu);
+
 		const handleAnimationChange = (event: Event) => {
 			const detail =
 				event instanceof CustomEvent
@@ -288,6 +294,7 @@
 			mediaQuery.removeEventListener('change', handleSystemThemeChange);
 			window.removeEventListener('pt-theme-change', handleThemeChange);
 			window.removeEventListener('pt-language-change', handleLanguageChange);
+			window.removeEventListener('contextmenu', preventNativeContextMenu);
 			window.removeEventListener('pt-animations-change', handleAnimationChange);
 		};
 	});
