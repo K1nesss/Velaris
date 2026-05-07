@@ -429,4 +429,8 @@ Velaris 会在本地用户目录中保存数据库、缓存图标、Steam 封面
 
 ## License
 
-当前仓库用于个人开发与测试。正式公开发布前建议补充 License，并检查第三方依赖、Steam 资源缓存和图标资源的版权合规。
+本项目采用 [PolyForm Noncommercial License 1.0.0](./LICENSE)。
+
+允许用于学习、研究、个人非商业使用、私人测试和爱好项目。禁止任何商业用途；商业使用、商用分发、作为商业产品或商业服务的一部分使用，均需要获得版权持有者明确书面授权。
+
+详细条款以 [LICENSE](./LICENSE) 和 [PolyForm Noncommercial License 1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0) 官方文本为准。
