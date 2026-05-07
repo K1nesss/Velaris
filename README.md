@@ -21,6 +21,8 @@
 <p align="center">
   <a href="#功能概览">功能</a>
   ·
+  <a href="#界面预览">预览</a>
+  ·
   <a href="#安装">安装</a>
   ·
   <a href="#首次配置">首次配置</a>
@@ -45,6 +47,36 @@
 - 设置页支持主题、动效、刷新间隔、默认统计区间、更新检查等配置。
 - 支持应用内更新提醒和一键更新。
 - 支持本地数据导入导出，方便备份和迁移。
+
+## 界面预览
+
+### Dashboard
+
+<img src="./docs/img/dashboard.png" alt="Dashboard" />
+
+### Dark Theme
+
+<img src="./docs/img/dark.png" alt="Dark theme dashboard" />
+
+### 游戏库
+
+<img src="./docs/img/games.png" alt="Games library" />
+
+### 游戏详情
+
+<img src="./docs/img/game-details.png" alt="Game details" />
+
+### Timeline
+
+<img src="./docs/img/timelines.png" alt="Timeline" />
+
+### Analytics
+
+<img src="./docs/img/analysis.png" alt="Analytics" />
+
+### 设置
+
+<img src="./docs/img/settings.png" alt="Settings" />
 
 ## 安装
 
