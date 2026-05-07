@@ -1,8 +1,34 @@
-# Velaris
+<p align="center">
+  <img src="./icon_full.png" width="180" alt="Velaris" />
+</p>
 
-Velaris 是一个基于 Tauri + SvelteKit + Rust 的桌面游戏时长追踪工具。它会扫描本机游戏库、监听游戏进程、记录每次游玩会话，并在 Dashboard、Timeline、Analytics 和游戏库中展示统计结果。
+<h1 align="center">Velaris</h1>
 
-当前项目以 Windows 桌面端为主要目标。
+<p align="center">
+  一个面向 Windows 桌面端的游戏时长追踪工具。扫描游戏库、监听游戏进程、记录游玩会话，并用清晰的仪表盘、时间线和统计视图展示你的游戏习惯。
+</p>
+
+<p align="center">
+  <a href="https://github.com/K1nesss/Velaris/releases/latest">
+    <img alt="Latest release" src="https://img.shields.io/github/v/release/K1nesss/Velaris?style=flat-square&label=release" />
+  </a>
+  <img alt="Platform" src="https://img.shields.io/badge/platform-Windows-2563eb?style=flat-square" />
+  <img alt="Tauri" src="https://img.shields.io/badge/Tauri-v2-24c8db?style=flat-square" />
+  <img alt="SvelteKit" src="https://img.shields.io/badge/SvelteKit-TypeScript-ff3e00?style=flat-square" />
+  <img alt="Rust" src="https://img.shields.io/badge/Rust-backend-b7410e?style=flat-square" />
+</p>
+
+<p align="center">
+  <a href="#功能概览">功能</a>
+  ·
+  <a href="#安装体验">安装</a>
+  ·
+  <a href="#开发环境">开发</a>
+  ·
+  <a href="#发布与更新">发布</a>
+  ·
+  <a href="./FUTURE_ROADMAP.md">未来规划</a>
+</p>
 
 ## 功能概览
 
@@ -14,6 +40,22 @@ Velaris 是一个基于 Tauri + SvelteKit + Rust 的桌面游戏时长追踪工�
 - 设置页支持主题、动效、刷新间隔、默认统计区间、更新检查等配置。
 - 支持 GitHub Release 更新提醒和 Tauri updater 一键更新。
 - 支持本地数据导入导出，方便备份和迁移。
+
+## 安装体验
+
+最新安装包在 GitHub Releases：
+
+```text
+https://github.com/K1nesss/Velaris/releases/latest
+```
+
+Windows 用户优先下载：
+
+```text
+Velaris_0.1.0_x64-setup.exe
+```
+
+应用内更新会读取 latest release 中的 `latest.json`，后续发布新版本时只需要上传新的安装包、签名文件和更新清单。
 
 ## 技术栈
 
@@ -43,8 +85,6 @@ pnpm install
 ```bash
 pnpm.cmd install
 ```
-
-## 常用命令
 
 启动前端开发服务：
 
@@ -93,8 +133,8 @@ https://github.com/K1nesss/Velaris/releases/latest/download/latest.json
 
 1. 更新 `src-tauri/tauri.conf.json` 里的 `version`。
 2. 使用 updater 私钥打包并生成签名更新产物。
-3. 创建 GitHub Release，例如 `v0.1.0`。
-4. 上传安装包 `.exe`、更新包和 `latest.json`。
+3. 创建 GitHub Release，例如 `v0.2.0`。
+4. 上传安装包 `.exe`、签名文件和 `latest.json`。
 5. 客户端检查更新时会读取 latest release 中的 `latest.json`。
 
 本机 updater 私钥路径：
