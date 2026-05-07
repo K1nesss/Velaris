@@ -21,11 +21,11 @@
 <p align="center">
   <a href="#功能概览">功能</a>
   ·
-  <a href="#安装体验">安装</a>
+  <a href="#安装">安装</a>
   ·
-  <a href="#开发环境">开发</a>
+  <a href="#开发">开发</a>
   ·
-  <a href="#发布与更新">发布</a>
+  <a href="#贡献">贡献</a>
   ·
   <a href="./FUTURE_ROADMAP.md">未来规划</a>
 </p>
@@ -38,10 +38,10 @@
 - Timeline 展示每条游戏记录，游戏头像优先使用已缓存的 Steam icon。
 - 游戏库支持封面展示、详情页、隐藏、删除和恢复隐藏游戏。
 - 设置页支持主题、动效、刷新间隔、默认统计区间、更新检查等配置。
-- 支持 GitHub Release 更新提醒和 Tauri updater 一键更新。
+- 支持应用内更新提醒和一键更新。
 - 支持本地数据导入导出，方便备份和迁移。
 
-## 安装体验
+## 安装
 
 最新安装包在 GitHub Releases：
 
@@ -55,8 +55,6 @@ Windows 用户优先下载：
 Velaris_0.1.0_x64-setup.exe
 ```
 
-应用内更新会读取 latest release 中的 `latest.json`，后续发布新版本时只需要上传新的安装包、签名文件和更新清单。
-
 ## 技术栈
 
 - 前端：SvelteKit、TypeScript、Tailwind CSS、ECharts
@@ -65,7 +63,7 @@ Velaris_0.1.0_x64-setup.exe
 - 数据库：SQLite、rusqlite
 - 更新：Tauri updater + GitHub Releases
 
-## 开发环境
+## 开发
 
 请先安装：
 
@@ -121,54 +119,25 @@ Windows 常见构建产物目录：
 - `src-tauri/target/release/bundle/nsis/`
 - `src-tauri/target/release/bundle/msi/`
 
-## 发布与更新
+## 贡献
 
-项目使用 GitHub Releases 作为安装包和更新清单的发布位置。当前 updater endpoint：
+欢迎通过 Pull Request 参与改进。
 
-```text
-https://github.com/K1nesss/Velaris/releases/latest/download/latest.json
-```
+建议流程：
 
-发布新版本时需要：
+1. Fork 本仓库。
+2. 基于自己的 fork 创建功能分支。
+3. 完成改动并在本地运行必要检查。
+4. 提交 Pull Request 到本仓库。
+5. 由维护者审核，通过后合并到主分支。
 
-1. 更新 `src-tauri/tauri.conf.json` 里的 `version`。
-2. 使用 updater 私钥打包并生成签名更新产物。
-3. 创建 GitHub Release，例如 `v0.2.0`。
-4. 上传安装包 `.exe`、签名文件和 `latest.json`。
-5. 客户端检查更新时会读取 latest release 中的 `latest.json`。
-
-本机 updater 私钥路径：
-
-```text
-C:\Users\swp\.tauri\velaris-updater.key
-```
-
-本机 updater 私钥密码路径：
-
-```text
-C:\Users\swp\.tauri\velaris-updater-password.txt
-```
-
-打包时可设置：
-
-```powershell
-$env:TAURI_SIGNING_PRIVATE_KEY=(Get-Content -Raw "C:\Users\swp\.tauri\velaris-updater.key")
-$env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD=(Get-Content -Raw "C:\Users\swp\.tauri\velaris-updater-password.txt")
-cargo tauri build
-```
-
-私钥和密码只能保存在本机或 CI Secret 中，不能提交到仓库。
-
-更完整的发布说明见 [UPDATE_RELEASE_GUIDE.md](./UPDATE_RELEASE_GUIDE.md)。
+版本发布、安装包签名和 GitHub Releases 由维护者统一处理。贡献者不需要接触任何发布私钥或更新签名配置。
 
 ## 分支建议
 
-- `main`：稳定发布分支，用于 GitHub Release。
-- `dev`：日常集成分支。
+- `main`：稳定主分支，用于合并已审核改动。
 - `feature/*`：功能开发分支。
 - `fix/*`：问题修复分支。
-
-当前如果是个人开发，也可以先直接在 `main` 上发布稳定版本，等功能多人协作或发布节奏变复杂后再恢复 `dev -> main` 的合并流程。
 
 ## 数据与资源
 
